@@ -7,3 +7,4 @@ target/
 *.log
 *.pdf
 .DS_Store
+HANDOFF.md
