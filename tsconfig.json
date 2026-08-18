@@ -1,0 +1,13 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/protocol" },
+    { "path": "./packages/runtime" },
+    { "path": "./packages/babel-plugin" },
+    { "path": "./packages/vite" },
+    { "path": "./packages/webpack" },
+    { "path": "./packages/react" },
+    { "path": "./packages/vue" },
+    { "path": "./packages/cli" }
+  ]
+}

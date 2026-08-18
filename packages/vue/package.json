@@ -1,0 +1,29 @@
+{
+  "name": "@tracr/vue",
+  "version": "0.0.0",
+  "description": "Vue adapter for tracr: sources and sinks. No shims required.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@tracr/protocol": "workspace:*",
+    "@tracr/runtime": "workspace:*"
+  },
+  "peerDependencies": {
+    "vue": "^3.4.0"
+  }
+}

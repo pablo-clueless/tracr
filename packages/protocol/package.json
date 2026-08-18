@@ -1,0 +1,22 @@
+{
+  "name": "@tracr/protocol",
+  "version": "0.0.0",
+  "description": "Language-neutral wire contract shared by tracr agents, core, and UI.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b"
+  }
+}

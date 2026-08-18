@@ -1,0 +1,17 @@
+[package]
+name = "tracr-core"
+description = "The tracr daemon: provenance DAG, static skeleton, aggregation."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "tracr-core"
+path = "src/main.rs"
+
+[lib]
+name = "tracr_core"
+path = "src/lib.rs"
+
+[dependencies]

@@ -1,0 +1,20 @@
+{
+  "name": "@tracr/example-express-api",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node --import tracr/register --experimental-strip-types src/server.ts",
+    "start": "node --experimental-strip-types src/server.ts",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^24.13.3",
+    "tracr": "workspace:*",
+    "typescript": "^6.0.2"
+  }
+}

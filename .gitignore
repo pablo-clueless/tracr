@@ -1,0 +1,9 @@
+node_modules/
+dist/
+target/
+*.tsbuildinfo
+.vite/
+*.local
+*.log
+*.pdf
+.DS_Store

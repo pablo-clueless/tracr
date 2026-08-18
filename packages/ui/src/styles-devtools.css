@@ -1,0 +1,123 @@
+@import url("https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap");
+
+:root {
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  border-color: #afafaf;
+  box-sizing: border-box;
+  font-family: "Inter", sans-serif;
+  margin: 0;
+  padding: 0;
+  scrollbar-width: none;
+  user-select: none;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: #ffffff;
+  color: #000000;
+  overflow-x: hidden;
+  width: 100%;
+  transition: colors 1.5s cubic-bezier(0.215, 0.61, 0.355, 1);
+  -webkit-transition: colors 1.5s cubic-bezier(0.215, 0.61, 0.355, 1);
+  -moz-transition: colors 1.5s cubic-bezier(0.215, 0.61, 0.355, 1);
+}
+
+.tracr {
+  background: #fff;
+  color: #000;
+  overflow: hidden;
+  position: fixed;
+  z-index: 9999;
+}
+
+/* .tracr .open {} */
+
+.tracr-devtools-bottom,
+.tracr-devtools-top {
+  max-height: 40vh;
+  width: 100vh;
+  left: 0;
+  right: 0;
+}
+
+.tracr-devtools-left,
+.tracr-devtools-right {
+  height: 100vh;
+  max-width: 40vh;
+  bottom: 0;
+  top: 0;
+}
+
+.tracr-devtools-bottom {
+  border-radius: 10px 10px 0 0;
+  bottom: 0;
+}
+
+.tracr-devtools-left {
+  border-radius: 10px 0 0 10px;
+  left: 0;
+}
+
+.tracr-devtools-right {
+  border-radius: 0 10px 10px 0;
+  right: 0;
+}
+
+.tracr-devtools-top {
+  border-radius: 0 0 10px 10px;
+  top: 0;
+}
+
+.tracr .tracr-inner {
+  height: 100%;
+  margin-block-end: 16px;
+  margin-block-start: 16px;
+  width: 100%;
+}
+
+.tracr .tracr-inner .toolbar {
+  align-items: center;
+  display: flex;
+  height: 40px;
+  justify-content: space-between;
+}
+
+.tracr .tracr-inner .canvas {
+  height: calc(100% - 46px);
+  overflow: auto;
+  width: 1005;
+}
+
+.tracr-button {
+  align-items: center;
+  border-radius: 8px;
+  display: inline-flex;
+  gap: 4px;
+}
+
+.tracr-button .tracr-button-outline {
+  background: transparent;
+  border: 1px thin #000;
+  color: #000;
+}
+
+.tracr-button .tracr-button-destructive {
+  background: #f87272;
+  color: #fe0000;
+}

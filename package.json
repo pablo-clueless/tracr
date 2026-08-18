@@ -1,0 +1,40 @@
+{
+  "name": "tracr-workspace",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Workspace root for tracr. Published packages live under packages/.",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@10.18.1",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "build:ui": "pnpm --filter @tracr/ui build",
+    "clean": "tsc -b --clean && cargo clean",
+    "typecheck": "tsc -b && pnpm --filter @tracr/ui --filter \"./examples/*\" typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "core:build": "cargo build -p tracr-core",
+    "core:test": "cargo test -p tracr-core",
+    "ui:dev": "pnpm --filter @tracr/ui dev",
+    "example:react": "pnpm --filter @tracr/example-react-vite dev",
+    "example:vue": "pnpm --filter @tracr/example-vue-vite dev",
+    "example:express": "pnpm --filter @tracr/example-express-api dev"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "eslint": "^10.8.1",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "prettier": "^3.9.6",
+    "prettier-plugin-tailwindcss": "^0.8.1",
+    "typescript": "^6.0.2",
+    "typescript-eslint": "^8.67.0",
+    "vitest": "^4.1.10"
+  }
+}
