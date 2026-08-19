@@ -1,5 +1,5 @@
 {
-  "name": "@tracr/protocol",
+  "name": "@pablo_clueless/protocol",
   "version": "0.0.0",
   "description": "Language-neutral wire contract shared by tracr agents, core, and UI.",
   "license": "MIT",

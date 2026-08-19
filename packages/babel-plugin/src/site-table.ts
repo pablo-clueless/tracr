@@ -1,4 +1,4 @@
-import type { SiteId, SiteInfo, SiteTable } from "@tracr/protocol";
+import type { SiteId, SiteInfo, SiteTable } from "@pablo_clueless/protocol";
 
 /**
  * Site IDs are assigned at transform time and the agent ships only the integer.

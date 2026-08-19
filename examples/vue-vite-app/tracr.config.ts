@@ -1,5 +1,5 @@
-import { defineConfig } from "tracr";
+import { defineConfig } from "@pablo_clueless/tracr";
 
 export default defineConfig({
-  adapters: ["@tracr/vue"],
+  adapters: ["@pablo_clueless/vue"],
 });

@@ -1,5 +1,5 @@
 {
-  "name": "@tracr/babel-plugin",
+  "name": "@pablo_clueless/babel-plugin",
   "version": "0.0.0",
   "description": "The tracr transform: shadow locals, object anchoring, taint side channel.",
   "license": "MIT",
@@ -22,7 +22,7 @@
   "dependencies": {
     "@babel/core": "^7.28.0",
     "@babel/types": "^7.28.0",
-    "@tracr/protocol": "workspace:*"
+    "@pablo_clueless/protocol": "workspace:*"
   },
   "devDependencies": {
     "@types/babel__core": "^7.20.5"

@@ -1,5 +1,5 @@
 {
-  "name": "@tracr/vue",
+  "name": "@pablo_clueless/vue",
   "version": "0.0.0",
   "description": "Vue adapter for tracr: sources and sinks. No shims required.",
   "license": "MIT",
@@ -20,8 +20,8 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
-    "@tracr/protocol": "workspace:*",
-    "@tracr/runtime": "workspace:*"
+    "@pablo_clueless/protocol": "workspace:*",
+    "@pablo_clueless/runtime": "workspace:*"
   },
   "peerDependencies": {
     "vue": "^3.4.0"

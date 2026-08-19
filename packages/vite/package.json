@@ -1,5 +1,5 @@
 {
-  "name": "@tracr/vite",
+  "name": "@pablo_clueless/vite",
   "version": "0.0.0",
   "description": "Vite plugin for tracr. Runs enforce: 'post', after plugin-react / plugin-vue.",
   "license": "MIT",
@@ -21,8 +21,8 @@
   },
   "dependencies": {
     "@babel/core": "^7.28.0",
-    "@tracr/babel-plugin": "workspace:*",
-    "@tracr/protocol": "workspace:*"
+    "@pablo_clueless/babel-plugin": "workspace:*",
+    "@pablo_clueless/protocol": "workspace:*"
   },
   "peerDependencies": {
     "vite": "^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0"

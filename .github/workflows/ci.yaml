@@ -49,7 +49,7 @@ jobs:
       # A tracer reaching a production bundle is an incident. Verify it in CI,
       # not by inspection.
       - name: Build the react example for production
-        run: pnpm --filter @tracr/example-react-vite build
+        run: pnpm --filter @pablo_clueless/example-react-vite build
 
       - name: Assert no tracr runtime in the bundle
         run: |

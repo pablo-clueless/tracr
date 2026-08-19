@@ -1,4 +1,4 @@
-import type { SinkSpec, SourceSpec } from "@tracr/protocol";
+import type { SinkSpec, SourceSpec } from "@pablo_clueless/protocol";
 
 export interface TracrPluginOptions {
   /** Micromatch globs. `node_modules` is always excluded. */

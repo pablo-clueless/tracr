@@ -1,5 +1,5 @@
 {
-  "name": "@tracr/ui",
+  "name": "@pablo_clueless/ui",
   "private": true,
   "version": "0.0.0",
   "description": "The tracr graph UI: zustand -> graphology -> layout worker -> Cytoscape.",
@@ -12,7 +12,7 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
-    "@tracr/protocol": "workspace:*",
+    "@pablo_clueless/protocol": "workspace:*",
     "cytoscape": "^3.31.0",
     "graphology": "^0.26.0",
     "graphology-layout-forceatlas2": "^0.10.1",

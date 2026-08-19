@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentHello } from "@tracr/protocol";
+import type { AgentEvent, AgentHello } from "@pablo_clueless/protocol";
 
 /**
  * Agents encode to MessagePack and ship over a unix socket (Node) or a

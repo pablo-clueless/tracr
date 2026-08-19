@@ -1,5 +1,5 @@
 {
-  "name": "@tracr/webpack",
+  "name": "@pablo_clueless/webpack",
   "version": "0.0.0",
   "description": "Webpack loader for tracr.",
   "license": "MIT",
@@ -21,8 +21,8 @@
   },
   "dependencies": {
     "@babel/core": "^7.28.0",
-    "@tracr/babel-plugin": "workspace:*",
-    "@tracr/protocol": "workspace:*"
+    "@pablo_clueless/babel-plugin": "workspace:*",
+    "@pablo_clueless/protocol": "workspace:*"
   },
   "peerDependencies": {
     "webpack": "^5.0.0"

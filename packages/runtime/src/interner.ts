@@ -1,4 +1,10 @@
-import { CombineOp, UNTAINTED, type DagNode, type Label, type SiteId } from "@tracr/protocol";
+import {
+  CombineOp,
+  UNTAINTED,
+  type DagNode,
+  type Label,
+  type SiteId,
+} from "@pablo_clueless/protocol";
 
 /**
  * Hash-consed provenance DAG. Identical `(op, siteId, parents)` always yields

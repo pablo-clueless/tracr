@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CombineOp, UNTAINTED } from "@tracr/protocol";
+import { CombineOp, UNTAINTED } from "@pablo_clueless/protocol";
 
 import { Interner } from "../src/interner.js";
 

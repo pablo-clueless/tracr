@@ -1,5 +1,5 @@
 {
-  "name": "@tracr/runtime",
+  "name": "@pablo_clueless/runtime",
   "version": "0.0.0",
   "description": "The $t runtime: label interner, object anchoring, ring buffer, transport.",
   "license": "MIT",
@@ -20,7 +20,7 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
-    "@tracr/protocol": "workspace:*"
+    "@pablo_clueless/protocol": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.13.3"

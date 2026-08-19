@@ -1,4 +1,4 @@
-import { UNTAINTED, type Label } from "@tracr/protocol";
+import { UNTAINTED, type Label } from "@pablo_clueless/protocol";
 
 /**
  * Object-anchored taint. This is what survives uninstrumented framework frames:
