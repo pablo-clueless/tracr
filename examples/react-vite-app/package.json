@@ -1,5 +1,5 @@
 {
-  "name": "@tracr/example-react-vite",
+  "name": "@pablo_clueless/example-react-vite",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -15,12 +15,12 @@
     "react-router-dom": "^7.18.2"
   },
   "devDependencies": {
-    "@tracr/react": "workspace:*",
-    "@tracr/vite": "workspace:*",
+    "@pablo_clueless/react": "workspace:*",
+    "@pablo_clueless/vite": "workspace:*",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.4",
-    "tracr": "workspace:*",
+    "@pablo_clueless/tracr": "workspace:*",
     "typescript": "^6.0.2",
     "vite": "^8.2.0"
   }

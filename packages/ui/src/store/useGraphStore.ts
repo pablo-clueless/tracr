@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { CoreDelta, Skeleton } from "@tracr/protocol";
+import type { CoreDelta, Skeleton } from "@pablo_clueless/protocol";
 
 import {
   applyDelta,

@@ -1,5 +1,5 @@
 {
-  "name": "tracr",
+  "name": "@pablo_clueless/tracr",
   "version": "0.0.0",
   "description": "Value-level provenance tracing. Install as a devDependency.",
   "license": "MIT",
@@ -32,8 +32,8 @@
   },
   "dependencies": {
     "@babel/core": "^7.28.0",
-    "@tracr/babel-plugin": "workspace:*",
-    "@tracr/protocol": "workspace:*",
-    "@tracr/runtime": "workspace:*"
+    "@pablo_clueless/babel-plugin": "workspace:*",
+    "@pablo_clueless/protocol": "workspace:*",
+    "@pablo_clueless/runtime": "workspace:*"
   }
 }

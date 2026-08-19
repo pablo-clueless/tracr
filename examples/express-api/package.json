@@ -1,5 +1,5 @@
 {
-  "name": "@tracr/example-express-api",
+  "name": "@pablo_clueless/example-express-api",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -14,7 +14,7 @@
   "devDependencies": {
     "@types/express": "^5.0.0",
     "@types/node": "^24.13.3",
-    "tracr": "workspace:*",
+    "@pablo_clueless/tracr": "workspace:*",
     "typescript": "^6.0.2"
   }
 }

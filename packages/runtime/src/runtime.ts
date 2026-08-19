@@ -6,7 +6,7 @@ import {
   type AgentHello,
   type Label,
   type SiteId,
-} from "@tracr/protocol";
+} from "@pablo_clueless/protocol";
 
 import { anchor, anchorSelf, readAnchor, readSelf, reanchor } from "./anchor.js";
 import { nullTransport, type Transport } from "./transport.js";

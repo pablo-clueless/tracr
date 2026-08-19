@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { UpdateTag, type CoreUpdate } from "@tracr/protocol";
+import { UpdateTag, type CoreUpdate } from "@pablo_clueless/protocol";
 
 import { useGraphStore } from "../store/useGraphStore";
 

@@ -1,5 +1,5 @@
 {
-  "name": "@tracr/example-vue-vite",
+  "name": "@pablo_clueless/example-vue-vite",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -13,10 +13,10 @@
     "vue": "^3.5.13"
   },
   "devDependencies": {
-    "@tracr/vite": "workspace:*",
-    "@tracr/vue": "workspace:*",
+    "@pablo_clueless/vite": "workspace:*",
+    "@pablo_clueless/vue": "workspace:*",
     "@vitejs/plugin-vue": "^6.0.0",
-    "tracr": "workspace:*",
+    "@pablo_clueless/tracr": "workspace:*",
     "typescript": "^6.0.2",
     "vite": "^8.2.0",
     "vue-tsc": "^2.2.0"

@@ -1,4 +1,4 @@
-import { defineConfig } from "tracr";
+import { defineConfig } from "@pablo_clueless/tracr";
 
 export default defineConfig({
   sources: [

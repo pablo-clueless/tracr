@@ -1,5 +1,9 @@
 import { transformAsync } from "@babel/core";
-import { tracrBabelPlugin, resolveOptions, type TracrPluginOptions } from "@tracr/babel-plugin";
+import {
+  tracrBabelPlugin,
+  resolveOptions,
+  type TracrPluginOptions,
+} from "@pablo_clueless/babel-plugin";
 
 export interface TracrViteOptions extends Partial<TracrPluginOptions> {
   /** When false the plugin returns nothing, so a production build is untouched. */

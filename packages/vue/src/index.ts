@@ -1,4 +1,4 @@
-import type { SinkSpec, SourceSpec, TracrAdapter } from "@tracr/protocol";
+import type { SinkSpec, SourceSpec, TracrAdapter } from "@pablo_clueless/protocol";
 
 const sources: SourceSpec[] = [{ id: "vue.input.value", module: "*", path: "event.target.value" }];
 

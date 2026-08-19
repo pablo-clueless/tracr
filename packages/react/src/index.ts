@@ -1,4 +1,4 @@
-import type { ShimSpec, SinkSpec, SourceSpec, TracrAdapter } from "@tracr/protocol";
+import type { ShimSpec, SinkSpec, SourceSpec, TracrAdapter } from "@pablo_clueless/protocol";
 
 const sources: SourceSpec[] = [
   { id: "react.input.value", module: "*", path: "event.target.value" },

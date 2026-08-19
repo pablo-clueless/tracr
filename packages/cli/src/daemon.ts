@@ -3,7 +3,7 @@ import type { TracrConfig } from "./config.js";
 /**
  * The core is a Rust binary shipped per-platform under optionalDependencies,
  * the same distribution model as esbuild and SWC. Resolution walks the
- * `@tracr/core-{platform}` packages and falls back to a locally built binary.
+ * `@pablo_clueless/core-{platform}` packages and falls back to a locally built binary.
  */
 export const resolveCoreBinary = (): string | null => {
   const platform = `${process.platform}-${process.arch}`;

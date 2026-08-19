@@ -39,15 +39,15 @@ importers:
         specifier: ^5.1.0
         version: 5.2.1
     devDependencies:
+      '@pablo_clueless/tracr':
+        specifier: workspace:*
+        version: link:../../packages/cli
       '@types/express':
         specifier: ^5.0.0
         version: 5.0.6
       '@types/node':
         specifier: ^24.13.3
         version: 24.13.3
-      tracr:
-        specifier: workspace:*
-        version: link:../../packages/cli
       typescript:
         specifier: ^6.0.2
         version: 6.0.3
@@ -64,10 +64,13 @@ importers:
         specifier: ^7.18.2
         version: 7.18.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
     devDependencies:
-      '@tracr/react':
+      '@pablo_clueless/react':
         specifier: workspace:*
         version: link:../../packages/react
-      '@tracr/vite':
+      '@pablo_clueless/tracr':
+        specifier: workspace:*
+        version: link:../../packages/cli
+      '@pablo_clueless/vite':
         specifier: workspace:*
         version: link:../../packages/vite
       '@types/react':
@@ -79,9 +82,6 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^6.0.4
         version: 6.0.5(vite@8.2.1(@types/node@26.2.0)(terser@5.50.0))
-      tracr:
-        specifier: workspace:*
-        version: link:../../packages/cli
       typescript:
         specifier: ^6.0.2
         version: 6.0.3
@@ -95,18 +95,18 @@ importers:
         specifier: ^3.5.13
         version: 3.5.41(typescript@6.0.3)
     devDependencies:
-      '@tracr/vite':
+      '@pablo_clueless/tracr':
+        specifier: workspace:*
+        version: link:../../packages/cli
+      '@pablo_clueless/vite':
         specifier: workspace:*
         version: link:../../packages/vite
-      '@tracr/vue':
+      '@pablo_clueless/vue':
         specifier: workspace:*
         version: link:../../packages/vue
       '@vitejs/plugin-vue':
         specifier: ^6.0.0
         version: 6.0.8(vite@8.2.1(@types/node@26.2.0)(terser@5.50.0))(vue@3.5.41(typescript@6.0.3))
-      tracr:
-        specifier: workspace:*
-        version: link:../../packages/cli
       typescript:
         specifier: ^6.0.2
         version: 6.0.3
@@ -125,7 +125,7 @@ importers:
       '@babel/types':
         specifier: ^7.28.0
         version: 7.29.8
-      '@tracr/protocol':
+      '@pablo_clueless/protocol':
         specifier: workspace:*
         version: link:../protocol
     devDependencies:
@@ -138,13 +138,13 @@ importers:
       '@babel/core':
         specifier: ^7.28.0
         version: 7.29.7
-      '@tracr/babel-plugin':
+      '@pablo_clueless/babel-plugin':
         specifier: workspace:*
         version: link:../babel-plugin
-      '@tracr/protocol':
+      '@pablo_clueless/protocol':
         specifier: workspace:*
         version: link:../protocol
-      '@tracr/runtime':
+      '@pablo_clueless/runtime':
         specifier: workspace:*
         version: link:../runtime
 
@@ -152,10 +152,10 @@ importers:
 
   packages/react:
     dependencies:
-      '@tracr/protocol':
+      '@pablo_clueless/protocol':
         specifier: workspace:*
         version: link:../protocol
-      '@tracr/runtime':
+      '@pablo_clueless/runtime':
         specifier: workspace:*
         version: link:../runtime
       react:
@@ -164,7 +164,7 @@ importers:
 
   packages/runtime:
     dependencies:
-      '@tracr/protocol':
+      '@pablo_clueless/protocol':
         specifier: workspace:*
         version: link:../protocol
     devDependencies:
@@ -174,7 +174,7 @@ importers:
 
   packages/ui:
     dependencies:
-      '@tracr/protocol':
+      '@pablo_clueless/protocol':
         specifier: workspace:*
         version: link:../protocol
       cytoscape:
@@ -220,10 +220,10 @@ importers:
       '@babel/core':
         specifier: ^7.28.0
         version: 7.29.7
-      '@tracr/babel-plugin':
+      '@pablo_clueless/babel-plugin':
         specifier: workspace:*
         version: link:../babel-plugin
-      '@tracr/protocol':
+      '@pablo_clueless/protocol':
         specifier: workspace:*
         version: link:../protocol
       vite:
@@ -236,10 +236,10 @@ importers:
 
   packages/vue:
     dependencies:
-      '@tracr/protocol':
+      '@pablo_clueless/protocol':
         specifier: workspace:*
         version: link:../protocol
-      '@tracr/runtime':
+      '@pablo_clueless/runtime':
         specifier: workspace:*
         version: link:../runtime
       vue:
@@ -251,10 +251,10 @@ importers:
       '@babel/core':
         specifier: ^7.28.0
         version: 7.29.7
-      '@tracr/babel-plugin':
+      '@pablo_clueless/babel-plugin':
         specifier: workspace:*
         version: link:../babel-plugin
-      '@tracr/protocol':
+      '@pablo_clueless/protocol':
         specifier: workspace:*
         version: link:../protocol
       webpack:

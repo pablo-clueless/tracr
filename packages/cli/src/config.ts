@@ -1,7 +1,7 @@
-import type { SinkSpec, SourceSpec } from "@tracr/protocol";
+import type { SinkSpec, SourceSpec } from "@pablo_clueless/protocol";
 
 export interface TracrConfig {
-  /** Adapter package names, e.g. `["@tracr/react"]`. */
+  /** Adapter package names, e.g. `["@pablo_clueless/react"]`. */
   adapters: string[];
   sources: SourceSpec[];
   sinks: SinkSpec[];

@@ -11,9 +11,9 @@
   },
   "scripts": {
     "build": "tsc -b",
-    "build:ui": "pnpm --filter @tracr/ui build",
+    "build:ui": "pnpm --filter @pablo_clueless/ui build",
     "clean": "tsc -b --clean && cargo clean",
-    "typecheck": "tsc -b && pnpm --filter @tracr/ui --filter \"./examples/*\" typecheck",
+    "typecheck": "tsc -b && pnpm --filter @pablo_clueless/ui --filter \"./examples/*\" typecheck",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
@@ -22,10 +22,10 @@
     "format:check": "prettier --check .",
     "core:build": "cargo build -p tracr-core",
     "core:test": "cargo test -p tracr-core",
-    "ui:dev": "pnpm --filter @tracr/ui dev",
-    "example:react": "pnpm --filter @tracr/example-react-vite dev",
-    "example:vue": "pnpm --filter @tracr/example-vue-vite dev",
-    "example:express": "pnpm --filter @tracr/example-express-api dev"
+    "ui:dev": "pnpm --filter @pablo_clueless/ui dev",
+    "example:react": "pnpm --filter @pablo_clueless/example-react-vite dev",
+    "example:vue": "pnpm --filter @pablo_clueless/example-vue-vite dev",
+    "example:express": "pnpm --filter @pablo_clueless/example-express-api dev"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",

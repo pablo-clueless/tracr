@@ -37,7 +37,7 @@ jobs:
             exit 1
           fi
 
-      # @tracr/ui is private and is not published.
+      # @pablo_clueless/ui is private and is not published.
       - name: Publish
         run: pnpm -r --filter "./packages/*" publish --provenance --access public --no-git-checks
         env:
