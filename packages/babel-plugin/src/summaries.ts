@@ -34,3 +34,40 @@ export const BUILTIN_SUMMARIES: Record<string, BuiltinSummary> = {
   String: { receiver: false, args: [0] },
   parseInt: { receiver: false, args: [0] },
 };
+
+/**
+ * Method-name index. `String.prototype.slice` and `Array.prototype.slice` carry
+ * the same summary, so collapsing on the bare name loses nothing — and a
+ * receiver's type is not knowable statically anyway. A user object with a
+ * `slice` method is over-approximated, which is the safe direction for taint.
+ */
+const BY_METHOD = new Map<string, BuiltinSummary>();
+const BY_PATH = new Map<string, BuiltinSummary>();
+
+for (const [key, summary] of Object.entries(BUILTIN_SUMMARIES)) {
+  const prototype = key.match(/^(\w+)\.prototype\.(\w+)$/);
+  if (prototype !== null) {
+    BY_METHOD.set(prototype[2] as string, summary);
+    continue;
+  }
+  BY_PATH.set(key, summary);
+}
+
+/**
+ * Resolves a callee to a summary. `path` is the full dotted callee
+ * (`JSON.parse`), `method` the trailing property name (`trim`).
+ */
+export const lookupBuiltin = (
+  path: string | null,
+  method: string | null,
+): BuiltinSummary | null => {
+  if (path !== null) {
+    const exact = BY_PATH.get(path);
+    if (exact !== undefined) return exact;
+  }
+  if (method !== null) {
+    const byMethod = BY_METHOD.get(method);
+    if (byMethod !== undefined) return byMethod;
+  }
+  return null;
+};

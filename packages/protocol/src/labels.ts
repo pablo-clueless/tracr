@@ -23,6 +23,8 @@ export const CombineOp = {
   Return: 5,
   Builtin: 6,
   Spread: 7,
+  /** An array or object literal holding tainted parts. */
+  Container: 8,
 } as const;
 export type CombineOp = (typeof CombineOp)[keyof typeof CombineOp];
 

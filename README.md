@@ -9,9 +9,11 @@ provenance**: given a value at a sink, show the exact derivation chain back to i
 
 Ships as a `devDependency` and compiles to nothing when disabled.
 
-> **Status: pre-Phase-0.** The package layout, protocol types, and toolchain are in place.
-> The transform itself is a visitor skeleton and the daemon does not run yet, so nothing is
-> published to npm. See [Roadmap](#roadmap).
+> **Status: Phase 0 complete.** The transform propagates value-level provenance and the
+> Phase 0 gate holds: a value read in Express middleware reaches `db.query` in a separate
+> handler with a complete derivation chain, across uninstrumented framework dispatch.
+> There is no daemon and no live UI yet, so nothing is published to npm.
+> See [Roadmap](#roadmap).
 
 ## Install
 
@@ -88,7 +90,23 @@ pnpm format
 
 pnpm core:build   # cargo build -p tracr-core
 pnpm core:test
+
+pnpm gate         # dump the Phase 0 derivation chain (needs pnpm build first)
 ```
+
+`pnpm gate` prints the chain the spike produces:
+
+```
+#1 origin express.body at src/server.js:4:16 (normalize)
+#2 builtin(#1)         at src/server.js:5:25 (normalize)   <- .trim()
+#3 builtin(#2)         at src/server.js:5:32 (normalize)   <- .toLowerCase()
+#4 template(#3)        at src/server.js:9:17               <- `%${req.searchTerm}%`
+#5 container(#4)       at src/server.js:10:64              <- [like] -> query(...)
+```
+
+Steps 1-3 run in the middleware and 4-5 in the handler. Express's own dispatch sits
+between them and is never transformed, so the only thing carrying the label across is
+the `WeakMap` anchored on `req`.
 
 Run the UI and the example apps:
 
@@ -105,7 +123,7 @@ Each phase has a gate that must hold before the next one starts.
 
 | Phase         | Scope                                       | Gate                                                             |
 | ------------- | ------------------------------------------- | ---------------------------------------------------------------- |
-| 0 — spike     | Babel plugin only, console-dump the DAG     | `req.body.name` → `db.query` chains _through_ Express middleware |
+| 0 — spike ✅  | Babel plugin only, console-dump the DAG     | `req.body.name` → `db.query` chains _through_ Express middleware |
 | 1 — agents    | Node loader hook, Vite plugin, transport    | Express under 5x baseline; HMR still under 500ms                 |
 | 2 — adapters  | Vue first (no shims), then React hook shims | Typed input reaches a `fetch` body with provenance intact        |
 | 3 — core      | Rust daemon owns the DAG and the skeleton   | Sustains agent event rate, bounded memory over 10 minutes        |

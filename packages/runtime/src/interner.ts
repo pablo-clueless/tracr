@@ -36,10 +36,12 @@ export class Interner {
     });
   }
 
+  /**
+   * Both untainted is the only case that does no work. Any tainted operand
+   * makes this a real derivation step, and the step is what gets rendered.
+   */
   union(a: Label, b: Label, siteId: SiteId): Label {
-    if (a === UNTAINTED) return b;
-    if (b === UNTAINTED) return a;
-    if (a === b) return a;
+    if (a === UNTAINTED && b === UNTAINTED) return UNTAINTED;
     return this.combine(CombineOp.Binary, siteId, [a, b]);
   }
 

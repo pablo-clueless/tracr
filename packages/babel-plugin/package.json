@@ -17,7 +17,8 @@
   ],
   "scripts": {
     "build": "tsc -b",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "gate": "node scripts/gate.mjs"
   },
   "dependencies": {
     "@babel/core": "^7.28.0",
@@ -25,6 +26,8 @@
     "@pablo_clueless/protocol": "workspace:*"
   },
   "devDependencies": {
-    "@types/babel__core": "^7.20.5"
+    "@pablo_clueless/runtime": "workspace:*",
+    "@types/babel__core": "^7.20.5",
+    "@types/babel__traverse": "^7.20.6"
   }
 }
