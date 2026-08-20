@@ -25,6 +25,8 @@
     "@pablo_clueless/protocol": "workspace:*"
   },
   "devDependencies": {
-    "@types/babel__core": "^7.20.5"
+    "@pablo_clueless/runtime": "workspace:*",
+    "@types/babel__core": "^7.20.5",
+    "@types/babel__traverse": "^7.20.6"
   }
 }

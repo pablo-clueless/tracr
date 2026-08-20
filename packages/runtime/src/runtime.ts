@@ -6,12 +6,15 @@ import {
   type AgentHello,
   type Label,
   type SiteId,
+  type SiteInfo,
+  type SiteTable,
 } from "@pablo_clueless/protocol";
 
 import { anchor, anchorSelf, readAnchor, readSelf, reanchor } from "./anchor.js";
 import { nullTransport, type Transport } from "./transport.js";
 import { RingBuffer } from "./ring-buffer.js";
 import { Interner } from "./interner.js";
+import { formatChain } from "./explain.js";
 
 export interface RuntimeOptions {
   bufferSize: number;
@@ -39,6 +42,8 @@ export class TracrRuntime {
   argTaint: Label[] | null = null;
   retTaint: Label = UNTAINTED;
 
+  private readonly sites = new Map<SiteId, SiteInfo>();
+  private readonly sourceNames = new Map<number, string>();
   private readonly buffer: RingBuffer<AgentEvent>;
   private readonly options: RuntimeOptions;
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -73,7 +78,14 @@ export class TracrRuntime {
   sink(sinkId: number, site: SiteId, label: Label): void {
     if (label === UNTAINTED) return;
     this.buffer.push([EventTag.Sink, site, label, sinkId]);
+    this.onSink?.({ sinkId, site, label });
   }
+
+  /**
+   * Phase 0 has no daemon and no UI, so a sink hit has nowhere to go. This is
+   * the seam the spike observes instead.
+   */
+  onSink: ((event: { sinkId: number; site: SiteId; label: Label }) => void) | null = null;
 
   flow(from: SiteId, to: SiteId, label: Label): void {
     if (label === UNTAINTED) return;
@@ -98,6 +110,26 @@ export class TracrRuntime {
   readonly anchorSelf = anchorSelf;
   readonly readSelf = readSelf;
   readonly reanchor = reanchor;
+
+  /**
+   * The transform ships integers; these tables turn them back into file, line
+   * and source name for a human-readable chain.
+   */
+  registerSites(table: SiteTable): void {
+    for (const info of table.sites) this.sites.set(info.siteId, info);
+  }
+
+  registerSources(specs: { id: string }[]): void {
+    specs.forEach((spec, sourceId) => this.sourceNames.set(sourceId, spec.id));
+  }
+
+  /** The derivation chain for a label, source-first. */
+  explain(label: Label): string {
+    return formatChain(this.interner, label, {
+      sites: this.sites,
+      sourceNames: this.sourceNames,
+    });
+  }
 
   async start(hello: AgentHello): Promise<void> {
     await this.options.transport.open(hello);
