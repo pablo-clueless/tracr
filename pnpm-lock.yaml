@@ -129,9 +129,15 @@ importers:
         specifier: workspace:*
         version: link:../protocol
     devDependencies:
+      '@pablo_clueless/runtime':
+        specifier: workspace:*
+        version: link:../runtime
       '@types/babel__core':
         specifier: ^7.20.5
         version: 7.20.5
+      '@types/babel__traverse':
+        specifier: ^7.20.6
+        version: 7.28.0
 
   packages/cli:
     dependencies:
