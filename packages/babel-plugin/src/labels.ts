@@ -4,6 +4,7 @@ import type * as t from "@babel/types";
 import { CombineOp, type SiteId } from "@pablo_clueless/protocol";
 
 import { dottedPath, matchSource } from "./matchers.js";
+import { lookupBuiltin } from "./summaries.js";
 import { shadowName, type ShadowRegistry } from "./shadow.js";
 import type { SiteTableBuilder } from "./site-table.js";
 import type { TracrPluginOptions } from "./options.js";
@@ -33,6 +34,22 @@ export class LabelBuilder {
     return node.type === "NumericLiteral" && node.value === 0;
   }
 
+  /** The nearest enclosing function's name, for readable attribution. */
+  enclosingName(path: NodePath<t.Node>): string | null {
+    const fn = path.getFunctionParent();
+    if (fn === null) return null;
+
+    const node = fn.node;
+    if ("id" in node && node.id !== null && node.id !== undefined) return node.id.name;
+
+    // `const normalize = (req) => {}` carries its name on the declarator.
+    const parent = fn.parentPath;
+    if (parent !== null && parent.isVariableDeclarator() && parent.node.id.type === "Identifier") {
+      return parent.node.id.name;
+    }
+    return null;
+  }
+
   site(node: t.Node, fnName: string | null = null): SiteId {
     const loc = node.loc?.start;
     return this.ctx.sites.assign(this.ctx.filename, loc?.line ?? 0, loc?.column ?? 0, fnName);
@@ -60,16 +77,17 @@ export class LabelBuilder {
    * call on the hot path of every untainted binary op.
    */
   union(left: t.Expression, right: t.Expression, site: SiteId): t.Expression {
+    // Folding a half-untainted union would be correct for tracking taint and
+    // wrong for the product: `a + b` is a derivation step, and dropping it
+    // silently shortens the chain the user came here to read.
     if (this.isUntainted(left) && this.isUntainted(right)) return this.untainted();
-    if (this.isUntainted(left)) return right;
-    if (this.isUntainted(right)) return left;
     return this.call("union", [left, right, this.ctx.types.numericLiteral(site)]);
   }
 
   combine(op: CombineOp, site: SiteId, parents: t.Expression[]): t.Expression {
     const live = parents.filter((p) => !this.isUntainted(p));
     if (live.length === 0) return this.untainted();
-    if (live.length === 1) return live[0] as t.Expression;
+    // A single tainted parent is still a step: `x.trim()` happened here.
     const { types } = this.ctx;
     return this.call("combine", [
       types.numericLiteral(op),
@@ -99,7 +117,7 @@ export class LabelBuilder {
         if (node.left.type === "PrivateName") return this.untainted();
         const left = this.labelOf(path, node.left);
         const right = this.labelOf(path, node.right);
-        return this.union(left, right, this.site(node));
+        return this.union(left, right, this.site(node, this.enclosingName(path)));
       }
 
       case "LogicalExpression":
@@ -120,14 +138,33 @@ export class LabelBuilder {
         const parts = node.expressions
           .filter((e): e is t.Expression => !e.type.startsWith("TS"))
           .map((e) => this.labelOf(path, e));
-        return this.combine(CombineOp.Template, this.site(node), parts);
+        return this.combine(CombineOp.Template, this.site(node, this.enclosingName(path)), parts);
       }
 
       // Only correct when the shadow is evaluated immediately after the call,
       // which is what the declaration and argument rewrites guarantee.
       case "CallExpression":
-      case "NewExpression":
-        return this.call("takeReturn", []);
+      case "NewExpression": {
+        const summary = node.type === "CallExpression" ? this.builtinLabel(path, node) : null;
+        return summary ?? this.call("takeReturn", []);
+      }
+
+      // A container is only as tainted as what was put in it. Without this a
+      // value dies the moment it is passed as `f([x])`.
+      case "ArrayExpression": {
+        const parts = node.elements
+          .filter((e): e is t.Expression => e !== null && e.type !== "SpreadElement")
+          .map((e) => this.labelOf(path, e));
+        return this.combine(CombineOp.Container, this.site(node, this.enclosingName(path)), parts);
+      }
+
+      case "ObjectExpression": {
+        const parts = node.properties
+          .filter((p): p is t.ObjectProperty => p.type === "ObjectProperty")
+          .filter((p) => !p.value.type.startsWith("TS") && p.value.type !== "RestElement")
+          .map((p) => this.labelOf(path, p.value as t.Expression));
+        return this.combine(CombineOp.Container, this.site(node, this.enclosingName(path)), parts);
+      }
 
       case "AwaitExpression":
         return this.labelOf(path, node.argument);
@@ -161,6 +198,52 @@ export class LabelBuilder {
   }
 
   /**
+   * The name of the builtin a callee resolves to, or null. Exposed so the call
+   * visitor can tell that a callee cannot consume the argument side channel.
+   */
+  builtinFor(node: t.CallExpression): ReturnType<typeof lookupBuiltin> {
+    const callee = node.callee;
+    if (callee.type === "V8IntrinsicIdentifier") return null;
+
+    const full = dottedPath(callee);
+    const method =
+      callee.type === "MemberExpression" &&
+      !callee.computed &&
+      callee.property.type === "Identifier"
+        ? callee.property.name
+        : null;
+
+    return lookupBuiltin(full, method);
+  }
+
+  /**
+   * Taint dies the moment a value enters an uninstrumented builtin, because
+   * `node_modules` and native code are never transformed. The summary table is
+   * the substitute: it says which operands reach the result.
+   */
+  private builtinLabel(path: NodePath<t.Node>, node: t.CallExpression): t.Expression | null {
+    const summary = this.builtinFor(node);
+    if (summary === null) return null;
+
+    const parents: t.Expression[] = [];
+
+    if (summary.receiver && node.callee.type === "MemberExpression") {
+      parents.push(this.labelOf(path, node.callee.object as t.Expression));
+    }
+
+    for (const index of summary.args) {
+      const arg = node.arguments[index];
+      if (arg === undefined || arg.type === "SpreadElement" || arg.type.startsWith("TS")) continue;
+      parents.push(this.labelOf(path, arg as t.Expression));
+    }
+
+    // `a.trim().toLowerCase()` has both CallExpressions starting at `a`, so
+    // attribute each step to its own method name instead.
+    const at = node.callee.type === "MemberExpression" ? node.callee.property : node;
+    return this.combine(CombineOp.Builtin, this.site(at, this.enclosingName(path)), parents);
+  }
+
+  /**
    * A declared source is an origin wherever it is read. Anything else falls back
    * to whatever was anchored on the object, which is the only taint that
    * survives a trip through uninstrumented framework code.
@@ -174,7 +257,7 @@ export class LabelBuilder {
       if (source !== null) {
         return this.call("origin", [
           types.numericLiteral(source.sourceId),
-          types.numericLiteral(this.site(node)),
+          types.numericLiteral(this.site(node, this.enclosingName(path))),
         ]);
       }
     }

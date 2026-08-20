@@ -1,6 +1,6 @@
 import { transformSync } from "@babel/core";
 import { TracrRuntime } from "@pablo_clueless/runtime";
-import type { Label, SinkSpec, SourceSpec } from "@pablo_clueless/protocol";
+import type { Label, SinkSpec, SiteTable, SourceSpec } from "@pablo_clueless/protocol";
 
 import { tracrBabelPlugin } from "../src/plugin.js";
 import type { TracrPluginOptions } from "../src/options.js";
@@ -20,7 +20,15 @@ export interface RunResult {
   chain(): string;
 }
 
-export const transform = (source: string, options: Partial<TracrPluginOptions> = {}): string => {
+export interface Transformed {
+  code: string;
+  siteTable: SiteTable;
+}
+
+export const transform = (
+  source: string,
+  options: Partial<TracrPluginOptions> = {},
+): Transformed => {
   const result = transformSync(source, {
     filename: "/app/example.js",
     babelrc: false,
@@ -28,7 +36,12 @@ export const transform = (source: string, options: Partial<TracrPluginOptions> =
     plugins: [[tracrBabelPlugin, options]],
   });
   if (result?.code == null) throw new Error("transform produced no output");
-  return result.code;
+
+  const meta = result.metadata as { tracr?: { siteTable: SiteTable } } | undefined;
+  return {
+    code: result.code,
+    siteTable: meta?.tracr?.siteTable ?? { runId: 0, sites: [] },
+  };
 };
 
 export interface RunOptions extends Partial<TracrPluginOptions> {
@@ -41,12 +54,13 @@ export interface RunOptions extends Partial<TracrPluginOptions> {
 
 export const run = (source: string, options: RunOptions = {}): RunResult => {
   const { externals = {}, ...pluginOptions } = options;
-  const code = transform(source, pluginOptions);
+  const { code, siteTable } = transform(source, pluginOptions);
 
   const runtime = new TracrRuntime();
   const sinks: SinkHit[] = [];
   runtime.onSink = (hit) => sinks.push(hit);
   runtime.registerSources((pluginOptions.sources ?? []) as SourceSpec[]);
+  runtime.registerSites(siteTable);
 
   const out: Record<string, unknown> = {};
   const externalNames = Object.keys(externals);

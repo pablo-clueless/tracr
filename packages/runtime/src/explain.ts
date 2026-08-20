@@ -25,6 +25,7 @@ const OP_NAMES: Record<number, string> = {
   [CombineOp.Return]: "return",
   [CombineOp.Builtin]: "builtin",
   [CombineOp.Spread]: "spread",
+  [CombineOp.Container]: "container",
 };
 
 /**

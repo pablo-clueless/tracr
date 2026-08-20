@@ -62,9 +62,7 @@ export class TracrRuntime {
   union(a: Label, b: Label, site: SiteId): Label {
     if (a === UNTAINTED && b === UNTAINTED) return UNTAINTED;
     const label = this.interner.union(a, b, site);
-    if (label !== a && label !== b) {
-      this.buffer.push([EventTag.Combine, site, label, CombineOp.Binary, [a, b]]);
-    }
+    this.buffer.push([EventTag.Combine, site, label, CombineOp.Binary, [a, b]]);
     return label;
   }
 

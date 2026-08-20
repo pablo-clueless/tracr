@@ -1,4 +1,5 @@
-import type { NodePath } from "@babel/traverse";
+import { writeFileSync } from "node:fs";
+
 import type { PluginObj, PluginPass } from "@babel/core";
 import type * as BabelTypes from "@babel/types";
 import type * as t from "@babel/types";
@@ -17,6 +18,8 @@ export interface TracrState {
   labels: LabelBuilder;
   /** Nodes this pass has already rewritten, so re-traversal does not recurse. */
   done: WeakSet<t.Node>;
+  /** Temps the transform introduced. They must never be shadowed themselves. */
+  generated: Set<string>;
 }
 
 export interface TracrPass extends PluginPass {
@@ -84,6 +87,16 @@ export const tracrBabelPlugin = (
   const rtMember = (name: string): t.MemberExpression =>
     types.memberExpression(rtId(), types.identifier(name));
 
+  /** True for anything this transform emitted: shadows and hoisted temps. */
+  const isGenerated = (name: string, generated: Set<string>): boolean =>
+    name.endsWith("$t") || generated.has(name);
+
+  /** True for `__tracr.anything`, so the transform never rewrites its own calls. */
+  const isRuntimeRef = (node: t.Node): boolean => {
+    const path = dottedPath(node);
+    return path !== null && path.split(".")[0] === options.runtimeGlobal;
+  };
+
   return {
     name: "tracr",
 
@@ -98,7 +111,19 @@ export const tracrBabelPlugin = (
         shadows,
         labels: new LabelBuilder({ types, options, shadows, sites, filename }),
         done: new WeakSet<t.Node>(),
+        generated: new Set<string>(),
       };
+    },
+
+    post(file) {
+      const table = this.tracr.sites.build();
+      const meta = (file as unknown as { metadata: Record<string, unknown> }).metadata;
+      meta.tracr = { siteTable: table };
+
+      // The agent ships only the integer at runtime; this is the side table
+      // that turns it back into a file and a line.
+      const target = this.tracr.options.siteTableOut;
+      if (target !== null) writeFileSync(target, JSON.stringify(table, null, 2));
     },
 
     visitor: {
@@ -108,6 +133,18 @@ export const tracrBabelPlugin = (
           const { labels, shadows, done } = this.tracr;
           if (done.has(path.node)) return;
           done.add(path.node);
+
+          // `x => expr` has nowhere to put the param prelude and no return
+          // statement to carry retTaint. Widening it to a block body is
+          // semantically identical and makes both possible.
+          if (
+            path.node.type === "ArrowFunctionExpression" &&
+            path.node.body.type !== "BlockStatement"
+          ) {
+            path.node.body = types.blockStatement([
+              types.returnStatement(path.node.body as t.Expression),
+            ]);
+          }
 
           const body = path.node.body;
           if (body.type !== "BlockStatement") return;
@@ -121,6 +158,7 @@ export const tracrBabelPlugin = (
           if (named.length === 0) return;
 
           const argsId = path.scope.generateUidIdentifier("args");
+          this.tracr.generated.add(argsId.name);
 
           for (const { param } of named) shadows.declare(path.scope, param.name);
 
@@ -156,7 +194,7 @@ export const tracrBabelPlugin = (
 
       // ---------------------------------------------------------- declarations
       VariableDeclaration(path) {
-        const { labels, shadows, done } = this.tracr;
+        const { labels, shadows, done, generated } = this.tracr;
         if (done.has(path.node)) return;
         done.add(path.node);
 
@@ -168,6 +206,7 @@ export const tracrBabelPlugin = (
 
         for (const declarator of path.node.declarations) {
           if (declarator.id.type !== "Identifier") continue;
+          if (isGenerated(declarator.id.name, generated)) continue;
 
           const label =
             declarator.init === null || declarator.init === undefined
@@ -182,13 +221,17 @@ export const tracrBabelPlugin = (
 
         if (extra.length === 0) return;
         path.node.declarations.push(...extra);
-        path.scope.crawl();
       },
 
       // ----------------------------------------------------------- assignments
       AssignmentExpression(path) {
-        const { labels, shadows, done } = this.tracr;
+        const { labels, shadows, done, generated } = this.tracr;
         if (done.has(path.node)) return;
+
+        // Writes the transform emitted: shadow updates, temps, `__tracr.retTaint`.
+        if (path.node.left.type === "Identifier" && isGenerated(path.node.left.name, generated))
+          return;
+        if (isRuntimeRef(path.node.left)) return;
 
         const { left, right, operator } = path.node;
         const site = labels.site(path.node);
@@ -211,7 +254,6 @@ export const tracrBabelPlugin = (
                 types.cloneNode(left),
               ]),
             );
-            path.skip();
             return;
           }
           done.add(path.node);
@@ -222,7 +264,6 @@ export const tracrBabelPlugin = (
               types.cloneNode(left),
             ]),
           );
-          path.skip();
           return;
         }
 
@@ -235,6 +276,7 @@ export const tracrBabelPlugin = (
         // Anchor on the object, which is the taint that survives a trip through
         // uninstrumented framework code.
         const temp = path.scope.generateUidIdentifier("v");
+        generated.add(temp.name);
         path.scope.push({ id: types.cloneNode(temp) });
 
         done.add(path.node);
@@ -246,7 +288,6 @@ export const tracrBabelPlugin = (
             types.cloneNode(temp),
           ]),
         );
-        path.skip();
       },
 
       // ----------------------------------------------------------- call sites
@@ -256,6 +297,7 @@ export const tracrBabelPlugin = (
 
         const callee = path.node.callee;
         if (callee.type === "V8IntrinsicIdentifier") return;
+        if (isRuntimeRef(callee)) return;
         if (path.node.arguments.some((arg) => arg.type === "SpreadElement")) return;
 
         const args = path.node.arguments.filter(
@@ -280,6 +322,8 @@ export const tracrBabelPlugin = (
 
           const valueTemp = path.scope.generateUidIdentifier("a");
           const labelTemp = path.scope.generateUidIdentifier("l");
+          this.tracr.generated.add(valueTemp.name);
+          this.tracr.generated.add(labelTemp.name);
           path.scope.push({ id: types.cloneNode(valueTemp) });
           path.scope.push({ id: types.cloneNode(labelTemp) });
 
@@ -292,13 +336,33 @@ export const tracrBabelPlugin = (
         const anyTainted = labelRefs.some((ref) => !labels.isUntainted(ref));
         const discarded = path.parentPath.isExpressionStatement();
 
+        // A builtin is uninstrumented: it never calls takeArgs, so setting the
+        // side channel would leave a stale value for the next real call, and it
+        // never sets retTaint either.
+        const builtin = labels.builtinFor(path.node) !== null;
+
+        // A label expression is not free to evaluate twice: `origin()` interns
+        // and emits an event on every call. When both the side channel and a
+        // sink report need the same label, it has to be read exactly once.
+        if (sink !== null && anyTainted) {
+          labelRefs.forEach((ref, index) => {
+            if (ref.type === "Identifier" || labels.isUntainted(ref)) return;
+            const labelTemp = path.scope.generateUidIdentifier("l");
+            this.tracr.generated.add(labelTemp.name);
+            path.scope.push({ id: types.cloneNode(labelTemp) });
+            prelude.push(types.assignmentExpression("=", types.cloneNode(labelTemp), ref));
+            labelRefs[index] = types.cloneNode(labelTemp);
+          });
+        }
+
         // Untainted call with a consumed result: nothing to do, and doing
         // nothing is the point.
         if (!anyTainted && sink === null && !discarded) return;
+        if (builtin && sink === null && !discarded) return;
 
         const sequence: t.Expression[] = [...prelude];
 
-        if (anyTainted) {
+        if (anyTainted && !builtin) {
           sequence.push(
             types.assignmentExpression(
               "=",
@@ -313,9 +377,7 @@ export const tracrBabelPlugin = (
           for (const index of sinkArgs(sink.spec, labelRefs.length)) {
             const ref = labelRefs[index];
             if (ref === undefined || labels.isUntainted(ref)) continue;
-            sequence.push(
-              labels.call("sink", [num(sink.sinkId), num(site), types.cloneNode(ref)]),
-            );
+            sequence.push(labels.call("sink", [num(sink.sinkId), num(site), types.cloneNode(ref)]));
           }
         }
 
@@ -327,10 +389,9 @@ export const tracrBabelPlugin = (
 
         // A discarded result leaves retTaint set, which the next takeReturn
         // would misattribute. Clearing costs one call and removes the class.
-        if (discarded) sequence.push(labels.call("takeReturn", []));
+        if (discarded && !builtin) sequence.push(labels.call("takeReturn", []));
 
         path.replaceWith(types.sequenceExpression(sequence));
-        path.skip();
       },
 
       // --------------------------------------------------------------- returns
@@ -343,22 +404,28 @@ export const tracrBabelPlugin = (
 
         if (argument === null || argument === undefined) {
           path.insertBefore(
-            types.expressionStatement(types.assignmentExpression("=", rtMember("retTaint"), num(0))),
+            types.expressionStatement(
+              types.assignmentExpression("=", rtMember("retTaint"), num(0)),
+            ),
           );
           return;
         }
 
         const label = labels.labelOf(path, argument);
         const temp = path.scope.generateUidIdentifier("r");
+        this.tracr.generated.add(temp.name);
+
+        // The replacement contains a ReturnStatement of its own; without
+        // marking it the visitor would rewrite its own output forever.
+        const replacement = types.returnStatement(types.cloneNode(temp));
+        done.add(replacement);
 
         path.replaceWithMultiple([
           types.variableDeclaration("const", [
             types.variableDeclarator(types.cloneNode(temp), argument),
           ]),
-          types.expressionStatement(
-            types.assignmentExpression("=", rtMember("retTaint"), label),
-          ),
-          types.returnStatement(types.cloneNode(temp)),
+          types.expressionStatement(types.assignmentExpression("=", rtMember("retTaint"), label)),
+          replacement,
         ]);
       },
 
