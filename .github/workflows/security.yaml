@@ -1,0 +1,130 @@
+name: Security
+
+on:
+  push:
+    branches: [main, development]
+  pull_request:
+    branches: [main, development]
+  schedule:
+    # A dependency that was clean when it merged does not stay clean, and a
+    # disclosure lands on a schedule nobody controls.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Pinned deliberately. The vendor's own action is `snyk/actions/node@master`,
+  # a mutable branch ref on a third party — the same class of entry point that
+  # put an obfuscated payload in this repo's eslint config. A version from the
+  # registry is at least immutable once published.
+  SNYK_VERSION: "1.1306.4"
+
+jobs:
+  snyk:
+    name: Snyk
+    runs-on: ubuntu-latest
+
+    # A pull request from a fork cannot read secrets, so the scan would fail on
+    # a missing token rather than on a finding. Those commits are covered by the
+    # push and scheduled runs once merged.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+
+    permissions:
+      contents: read
+      security-events: write # upload SARIF to code scanning
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # Fail loudly rather than skipping. A security job that quietly does
+      # nothing is worse than no security job, because the green check lies.
+      - name: Require SNYK_TOKEN
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: |
+          if [ -z "$SNYK_TOKEN" ]; then
+            echo "SNYK_TOKEN is not set." >&2
+            echo "Add it under Settings > Secrets and variables > Actions." >&2
+            exit 1
+          fi
+
+      - run: pnpm install --frozen-lockfile
+
+      # `continue-on-error` on both scans is deliberate: snyk exits non-zero when
+      # it finds something, and that must not skip the SARIF upload. The gate at
+      # the end turns a finding back into a failed job.
+
+      - name: Snyk open source
+        id: oss
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: >-
+          npx --yes snyk@"$SNYK_VERSION" test
+          --all-projects
+          --severity-threshold=high
+          --sarif-file-output=snyk-oss.sarif
+
+      # Static analysis of first-party code. This is the check with a plausible
+      # shot at flagging an injected blob like the one that reached
+      # eslint.config.js — the dependency scan above would never have seen it,
+      # because it was committed source, not a package.
+      #
+      # Needs Snyk Code enabled for the org; it errors out rather than passing
+      # if it is not, which the gate below reports.
+      - name: Snyk Code
+        id: code
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: >-
+          npx --yes snyk@"$SNYK_VERSION" code test
+          --severity-threshold=high
+          --sarif-file-output=snyk-code.sarif
+
+      # Separate categories: two uploads sharing one category overwrite rather
+      # than merge, and a hard scan failure leaves no file to upload.
+      - name: Upload open source results
+        if: always() && hashFiles('snyk-oss.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: snyk-oss.sarif
+          category: snyk-oss
+
+      - name: Upload code results
+        if: always() && hashFiles('snyk-code.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: snyk-code.sarif
+          category: snyk-code
+
+      # Snapshot the dependency tree so Snyk alerts on newly disclosed
+      # vulnerabilities between runs. Only from the trunk, so feature branches
+      # do not each become a monitored project.
+      - name: Snyk monitor
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: npx --yes snyk@"$SNYK_VERSION" monitor --all-projects
+
+      - name: Gate on findings
+        if: steps.oss.outcome == 'failure' || steps.code.outcome == 'failure'
+        run: |
+          echo "Snyk reported high-severity findings." >&2
+          echo "open source: ${{ steps.oss.outcome }}" >&2
+          echo "code:        ${{ steps.code.outcome }}" >&2
+          echo "Details are in the Security tab under Code scanning." >&2
+          exit 1
