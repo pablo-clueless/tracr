@@ -24,6 +24,7 @@
     "@pablo_clueless/protocol": "workspace:*"
   },
   "devDependencies": {
+    "@msgpack/msgpack": "^3.1.3",
     "@types/node": "^24.13.3"
   }
 }

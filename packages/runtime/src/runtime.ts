@@ -13,8 +13,8 @@ import {
 import { anchor, anchorSelf, readAnchor, readSelf, reanchor } from "./anchor.js";
 import { nullTransport, type Transport } from "./transport.js";
 import { RingBuffer } from "./ring-buffer.js";
-import { Interner } from "./interner.js";
 import { formatChain } from "./explain.js";
+import { Interner } from "./interner.js";
 
 export interface RuntimeOptions {
   bufferSize: number;

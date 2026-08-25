@@ -1,6 +1,12 @@
 export * from "./explain.js";
 export * from "./anchor.js";
 export * from "./interner.js";
+export * from "./msgpack.js";
+export { installNodeAgent, type NodeAgentOptions } from "./node-agent.js";
+export * from "./pending-queue.js";
+export { encodeBatch, encodeHello } from "./encode.js";
 export * from "./ring-buffer.js";
 export * from "./runtime.js";
 export * from "./transport.js";
+export * from "./transport-node.js";
+export * from "./transport-ws.js";

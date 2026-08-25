@@ -6,5 +6,5 @@ export default defineConfig({
     { id: "express.query", module: "express", path: "req.query" },
     { id: "express.params", module: "express", path: "req.params" },
   ],
-  sinks: [{ id: "db.query", module: "./src/db.js", path: "query", args: [0, 1] }],
+  sinks: [{ id: "db.query", module: "./src/db.ts", path: "query", args: [0, 1] }],
 });
