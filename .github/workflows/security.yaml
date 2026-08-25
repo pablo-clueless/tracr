@@ -144,10 +144,16 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: npx --yes snyk@"$SNYK_VERSION" monitor --all-projects
 
-      # The SARIF is already on disk, so a failed job should say what it found
-      # rather than sending you to another tab to find out.
-      - name: Summarise findings
+      # Reporting and gating are one step on purpose. Split apart, the summary
+      # lands in a step that succeeds and therefore collapses in the UI, while
+      # the step everyone actually opens is the one that failed — which then has
+      # nothing in it but a pointer somewhere else. The step that fails has to
+      # be the step that explains.
+      - name: Report and gate
         if: always()
+        env:
+          OSS: ${{ steps.oss.outputs.exit }}
+          CODE: ${{ steps.code.outputs.exit }}
         run: |
           node <<'NODE' | tee -a "$GITHUB_STEP_SUMMARY"
           const fs = require("node:fs");
@@ -201,23 +207,23 @@ jobs:
           }
           NODE
 
-      # Says which of the two happened, because "vulnerable dependency" and
-      # "the scanner did not run" need completely different responses.
-      - name: Gate on findings
-        if: always() && (steps.oss.outputs.exit != '0' || steps.code.outputs.exit != '0')
-        env:
-          OSS: ${{ steps.oss.outputs.exit }}
-          CODE: ${{ steps.code.outputs.exit }}
-        run: |
+          echo ""
+          echo "----------------------------------------"
+
+          # "vulnerable dependency" and "the scanner never ran" need completely
+          # different responses, so never collapse them into one message.
           describe() {
             case "$2" in
               0) echo "$1: clean" ;;
-              1) echo "$1: high-severity findings — see the Security tab" ;;
+              1) echo "$1: high-severity findings, listed above" ;;
               3) echo "$1: nothing to scan (configuration problem)" ;;
               "") echo "$1: did not report an exit code" ;;
-              *) echo "$1: scan FAILED with exit $2 — this is not a finding" ;;
+              *) echo "$1: scan FAILED with exit $2 — this is NOT a finding" ;;
             esac
           }
-          describe "open source" "$OSS" >&2
-          describe "code       " "$CODE" >&2
-          exit 1
+          describe "open source" "$OSS"
+          describe "code       " "$CODE"
+
+          if [ "$OSS" != "0" ] || [ "$CODE" != "0" ]; then
+            exit 1
+          fi
