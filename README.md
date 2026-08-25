@@ -82,7 +82,7 @@ Two invariants carry the whole design:
 
 ## Development
 
-Requires Node >= 20.19, pnpm 10, and a stable Rust toolchain.
+Requires Node >= 22.12, pnpm 10, and a stable Rust toolchain.
 
 ```sh
 pnpm install
