@@ -144,6 +144,63 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: npx --yes snyk@"$SNYK_VERSION" monitor --all-projects
 
+      # The SARIF is already on disk, so a failed job should say what it found
+      # rather than sending you to another tab to find out.
+      - name: Summarise findings
+        if: always()
+        run: |
+          node <<'NODE' | tee -a "$GITHUB_STEP_SUMMARY"
+          const fs = require("node:fs");
+
+          for (const [label, file] of [
+            ["Open source", "snyk-oss.sarif"],
+            ["Code", "snyk-code.sarif"],
+          ]) {
+            if (!fs.existsSync(file)) {
+              console.log(`### ${label}\n\nNo SARIF produced — the scan did not complete.\n`);
+              continue;
+            }
+
+            let sarif;
+            try {
+              sarif = JSON.parse(fs.readFileSync(file, "utf8"));
+            } catch {
+              console.log(`### ${label}\n\nSARIF was not parseable.\n`);
+              continue;
+            }
+
+            const rows = [];
+            for (const run of sarif.runs ?? []) {
+              const rules = new Map((run.tool?.driver?.rules ?? []).map((r) => [r.id, r]));
+              for (const result of run.results ?? []) {
+                const rule = rules.get(result.ruleId);
+                rows.push({
+                  id: result.ruleId ?? "",
+                  title: rule?.shortDescription?.text ?? result.message?.text ?? "",
+                  where: result.locations?.[0]?.physicalLocation?.artifactLocation?.uri ?? "",
+                });
+              }
+            }
+
+            // One advisory reached through several workspace projects is still
+            // one problem to fix.
+            const unique = [...new Map(rows.map((r) => [`${r.id}::${r.where}`, r])).values()];
+
+            if (unique.length === 0) {
+              console.log(`### ${label}\n\nNo findings.\n`);
+              continue;
+            }
+
+            console.log(`### ${label} — ${unique.length} finding(s)\n`);
+            console.log("| Advisory | Detail | Location |");
+            console.log("| --- | --- | --- |");
+            for (const r of unique) {
+              console.log(`| ${r.id} | ${r.title.replaceAll("|", "\\|")} | ${r.where} |`);
+            }
+            console.log("");
+          }
+          NODE
+
       # Says which of the two happened, because "vulnerable dependency" and
       # "the scanner did not run" need completely different responses.
       - name: Gate on findings
