@@ -62,20 +62,35 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # `continue-on-error` on both scans is deliberate: snyk exits non-zero when
-      # it finds something, and that must not skip the SARIF upload. The gate at
-      # the end turns a finding back into a failed job.
+      # The scans must not abort the job: a non-zero exit has to still reach the
+      # SARIF upload. But the exit code is captured rather than collapsed into
+      # pass/fail, because snyk distinguishes cases that matter:
+      #   0  clean
+      #   1  vulnerabilities found
+      #   2  scan error
+      #   3  no supported projects detected
+      # Treating 2 and 3 as "findings" reports a vulnerability that does not
+      # exist and hides a scanner that is not actually running.
 
       - name: Snyk open source
         id: oss
-        continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        run: >-
-          npx --yes snyk@"$SNYK_VERSION" test
-          --all-projects
-          --severity-threshold=high
-          --sarif-file-output=snyk-oss.sarif
+        run: |
+          set +e
+          npx --yes snyk@"$SNYK_VERSION" test \
+            --all-projects \
+            --severity-threshold=high \
+            --sarif-file-output=snyk-oss.sarif
+          code=$?
+          set -e
+          echo "exit=$code" >> "$GITHUB_OUTPUT"
+          case $code in
+            0) echo "clean" ;;
+            1) echo "::warning::high-severity dependency vulnerabilities" ;;
+            3) echo "::error::snyk found no supported projects to scan" ;;
+            *) echo "::error::snyk failed to scan (exit $code) — not a finding" ;;
+          esac
 
       # Static analysis of first-party code. This is the check with a plausible
       # shot at flagging an injected blob like the one that reached
@@ -86,13 +101,22 @@ jobs:
       # if it is not, which the gate below reports.
       - name: Snyk Code
         id: code
-        continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        run: >-
-          npx --yes snyk@"$SNYK_VERSION" code test
-          --severity-threshold=high
-          --sarif-file-output=snyk-code.sarif
+        run: |
+          set +e
+          npx --yes snyk@"$SNYK_VERSION" code test \
+            --severity-threshold=high \
+            --sarif-file-output=snyk-code.sarif
+          code=$?
+          set -e
+          echo "exit=$code" >> "$GITHUB_OUTPUT"
+          case $code in
+            0) echo "clean" ;;
+            1) echo "::warning::high-severity code findings" ;;
+            3) echo "::error::snyk code found nothing to scan" ;;
+            *) echo "::error::snyk code failed to run (exit $code) — not a finding" ;;
+          esac
 
       # Separate categories: two uploads sharing one category overwrite rather
       # than merge, and a hard scan failure leaves no file to upload.
@@ -120,11 +144,23 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: npx --yes snyk@"$SNYK_VERSION" monitor --all-projects
 
+      # Says which of the two happened, because "vulnerable dependency" and
+      # "the scanner did not run" need completely different responses.
       - name: Gate on findings
-        if: steps.oss.outcome == 'failure' || steps.code.outcome == 'failure'
+        if: always() && (steps.oss.outputs.exit != '0' || steps.code.outputs.exit != '0')
+        env:
+          OSS: ${{ steps.oss.outputs.exit }}
+          CODE: ${{ steps.code.outputs.exit }}
         run: |
-          echo "Snyk reported high-severity findings." >&2
-          echo "open source: ${{ steps.oss.outcome }}" >&2
-          echo "code:        ${{ steps.code.outcome }}" >&2
-          echo "Details are in the Security tab under Code scanning." >&2
+          describe() {
+            case "$2" in
+              0) echo "$1: clean" ;;
+              1) echo "$1: high-severity findings — see the Security tab" ;;
+              3) echo "$1: nothing to scan (configuration problem)" ;;
+              "") echo "$1: did not report an exit code" ;;
+              *) echo "$1: scan FAILED with exit $2 — this is not a finding" ;;
+            esac
+          }
+          describe "open source" "$OSS" >&2
+          describe "code       " "$CODE" >&2
           exit 1
