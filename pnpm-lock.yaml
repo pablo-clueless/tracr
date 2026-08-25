@@ -242,13 +242,22 @@ importers:
       '@pablo_clueless/protocol':
         specifier: workspace:*
         version: link:../protocol
-      vite:
-        specifier: ^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0
-        version: 8.2.1(@types/node@26.2.0)(terser@5.50.0)
+      '@pablo_clueless/runtime':
+        specifier: workspace:*
+        version: link:../runtime
+      '@pablo_clueless/tracr':
+        specifier: workspace:*
+        version: link:../cli
     devDependencies:
       '@types/babel__core':
         specifier: ^7.20.5
         version: 7.20.5
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      vite:
+        specifier: ^8.2.0
+        version: 8.2.1(@types/node@24.13.3)(terser@5.50.0)
 
   packages/vue:
     dependencies:

@@ -1,10 +1,10 @@
 import { readFile, readdir, unlink, writeFile } from "node:fs/promises";
-import { createHash } from "node:crypto";
-import { createRequire } from "node:module";
 import { dirname, isAbsolute, join, resolve } from "node:path";
+import { transformAsync } from "@babel/core";
+import { createRequire } from "node:module";
+import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 
-import { transformAsync } from "@babel/core";
 import type { ShimSpec, SinkSpec, SourceSpec, TracrAdapter } from "@pablo_clueless/protocol";
 
 export interface TracrConfig {
@@ -27,7 +27,10 @@ export const defaultConfig: TracrConfig = {
   sources: [],
   sinks: [],
   shims: [],
-  include: ["src/**/*.{js,jsx,ts,tsx}"],
+  // Every extension an agent can instrument. `.vue` / `.svelte` are here
+  // because the bundler plugin runs `enforce: 'post'` and sees compiled JS
+  // behind an id that still carries the original extension.
+  include: ["src/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts,vue,svelte}"],
   exclude: ["**/node_modules/**", "**/dist/**"],
   socket: ".tracr/daemon.sock",
   uiPort: 7331,
@@ -53,8 +56,7 @@ const importDirect = async (file: string): Promise<unknown> =>
   (await import(pathToFileURL(file).href)) as unknown;
 
 /** Resolved from here, not the config's directory, which need not have Babel. */
-const tsPreset = (): string =>
-  createRequire(import.meta.url).resolve("@babel/preset-typescript");
+const tsPreset = (): string => createRequire(import.meta.url).resolve("@babel/preset-typescript");
 
 /**
  * Babel-strip the config and import the result from the same directory. The

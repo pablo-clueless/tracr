@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createFilter, globToRegExp } from "../src/glob.js";
+import { createFilter, globToRegExp } from "../src/filter.js";
 
 describe("globToRegExp", () => {
   it("keeps `*` inside a single segment", () => {

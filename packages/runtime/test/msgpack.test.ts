@@ -58,7 +58,13 @@ describe("MsgPackWriter", () => {
   });
 
   it("encodes nested arrays and maps round-trip through the reference decoder", () => {
-    const value = { events: [[0, 10, 1, 7], [2, 11, 12, 3]], dropped: 4 };
+    const value = {
+      events: [
+        [0, 10, 1, 7],
+        [2, 11, 12, 3],
+      ],
+      dropped: 4,
+    };
     expect(decode(encodeMsgPack(value))).toEqual(value);
   });
 

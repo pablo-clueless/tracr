@@ -1,16 +1,16 @@
-import { createRequire } from "node:module";
-import { isAbsolute, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { isAbsolute, relative } from "node:path";
+import { createRequire } from "node:module";
 
 import { transformAsync, type TransformOptions } from "@babel/core";
+import type { SiteTable } from "@pablo_clueless/protocol";
 import {
+  createFilter,
   resolveOptions,
   tracrBabelPlugin,
+  type PathFilter,
   type TracrPluginOptions,
 } from "@pablo_clueless/babel-plugin";
-import type { SiteTable } from "@pablo_clueless/protocol";
-
-import { createFilter, type PathFilter } from "./glob.js";
 
 /**
  * Node module customization hooks. Registered via `module.register()`, which is
@@ -57,8 +57,9 @@ let filter: PathFilter = createFilter([], []);
 let root = process.cwd();
 
 try {
-  runtimeUrl = pathToFileURL(createRequire(import.meta.url).resolve("@pablo_clueless/runtime"))
-    .href;
+  runtimeUrl = pathToFileURL(
+    createRequire(import.meta.url).resolve("@pablo_clueless/runtime"),
+  ).href;
 } catch {
   // Runtime unresolvable: stay a pass-through rather than break the host.
 }
@@ -142,9 +143,7 @@ export const load = async (
       configFile: false,
       sourceMaps: false,
       parserOpts: {
-        plugins: parserPlugins(cleanUrl) as NonNullable<
-          TransformOptions["parserOpts"]
-        >["plugins"],
+        plugins: parserPlugins(cleanUrl) as NonNullable<TransformOptions["parserOpts"]>["plugins"],
       },
       plugins: [[tracrBabelPlugin, { ...resolveOptions(pluginOptions), siteIdBase: siteBase }]],
     });
@@ -155,9 +154,8 @@ export const load = async (
 
   if (transformed?.code == null) return result;
 
-  const table = (
-    transformed.metadata as { tracr?: { siteTable?: SiteTable } } | undefined
-  )?.tracr?.siteTable;
+  const table = (transformed.metadata as { tracr?: { siteTable?: SiteTable } } | undefined)?.tracr
+    ?.siteTable;
   if (table !== undefined) nextSiteBase += table.sites.length;
 
   const runtime = format === "commonjs" ? BOOT : "globalThis.__tracr";

@@ -56,8 +56,7 @@ export const wsTransport = (options: WsTransportOptions): Transport => {
   const pendingCapacity = options.pendingCapacity ?? DEFAULT_PENDING;
   const retryMs = options.retryMs ?? DEFAULT_RETRY_MS;
   const makeSocket =
-    options.factory ??
-    ((url: string) => new WebSocket(url) as unknown as WebSocketLike);
+    options.factory ?? ((url: string) => new WebSocket(url) as unknown as WebSocketLike);
 
   let running = false;
   let everConnected = false;
@@ -80,10 +79,7 @@ export const wsTransport = (options: WsTransportOptions): Transport => {
    * Opens one socket. `hello` is non-null only for the very first connection,
    * where success/failure settles the transport's open().
    */
-  const establish = (
-    hello: AgentHello | null,
-    settle: Deferred | null,
-  ): void => {
+  const establish = (hello: AgentHello | null, settle: Deferred | null): void => {
     const fail = setTimeout(() => {
       socket.close();
       settle?.reject(new Error(`tracr daemon not reachable at ${options.url}`));

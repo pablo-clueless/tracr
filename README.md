@@ -9,11 +9,16 @@ provenance**: given a value at a sink, show the exact derivation chain back to i
 
 Ships as a `devDependency` and compiles to nothing when disabled.
 
-> **Status: Phase 0 complete.** The transform propagates value-level provenance and the
-> Phase 0 gate holds: a value read in Express middleware reaches `db.query` in a separate
-> handler with a complete derivation chain, across uninstrumented framework dispatch.
-> There is no daemon and no live UI yet, so nothing is published to npm.
-> See [Roadmap](#roadmap).
+> **Status: Phase 1 complete.** Both agents are live. The Node loader hook and the Vite
+> plugin instrument real applications, read a shared `tracr.config.ts`, and boot a runtime
+> that encodes MessagePack over a unix socket (Node) or a WebSocket (browser). The Phase 0
+> chain still holds — now through the real loader in a running Express process, not just a
+> test harness.
+>
+> The Phase 1 gates hold: an instrumented Express app is at parity with baseline on an
+> untainted route (5x budget), and a Vue SFC edit round-trips through HMR in ~14ms (500ms
+> budget). The daemon does not exist yet, so agents buffer and drop; there is no UI, and
+> nothing is published to npm. See [Roadmap](#roadmap).
 
 ## Install
 
@@ -92,6 +97,7 @@ pnpm core:build   # cargo build -p tracr-core
 pnpm core:test
 
 pnpm gate         # dump the Phase 0 derivation chain (needs pnpm build first)
+pnpm bench        # the Phase 1 gates: express latency and HMR turnaround
 ```
 
 `pnpm gate` prints the chain the spike produces:
@@ -124,7 +130,7 @@ Each phase has a gate that must hold before the next one starts.
 | Phase         | Scope                                       | Gate                                                             |
 | ------------- | ------------------------------------------- | ---------------------------------------------------------------- |
 | 0 — spike ✅  | Babel plugin only, console-dump the DAG     | `req.body.name` → `db.query` chains _through_ Express middleware |
-| 1 — agents    | Node loader hook, Vite plugin, transport    | Express under 5x baseline; HMR still under 500ms                 |
+| 1 — agents ✅ | Node loader hook, Vite plugin, transport    | Express under 5x baseline; HMR still under 500ms                 |
 | 2 — adapters  | Vue first (no shims), then React hook shims | Typed input reaches a `fetch` body with provenance intact        |
 | 3 — core      | Rust daemon owns the DAG and the skeleton   | Sustains agent event rate, bounded memory over 10 minutes        |
 | 4 — UI        | graphology → worker → Cytoscape, ~2k cap    | Live updates without layout thrash under load                    |

@@ -1,8 +1,4 @@
-import {
-  FrameType,
-  type AgentEvent,
-  type AgentHello,
-} from "@pablo_clueless/protocol";
+import { FrameType, type AgentEvent, type AgentHello } from "@pablo_clueless/protocol";
 
 import { encodeMsgPack } from "./msgpack.js";
 

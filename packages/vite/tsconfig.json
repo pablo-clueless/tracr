@@ -3,17 +3,22 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "dist",
-    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.tsbuildinfo"
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.tsbuildinfo",
+    "types": ["node"]
   },
-  "include": [
-    "src/**/*.ts"
-  ],
+  "include": ["src/**/*.ts"],
   "references": [
     {
       "path": "../protocol"
     },
     {
       "path": "../babel-plugin"
+    },
+    {
+      "path": "../runtime"
+    },
+    {
+      "path": "../cli"
     }
   ]
 }

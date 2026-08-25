@@ -132,9 +132,7 @@ export class MsgPackWriter {
     if (input == null) return this.nil();
     switch (typeof input) {
       case "number":
-        return Number.isInteger(input)
-          ? this.uint(input)
-          : this.f64(input);
+        return Number.isInteger(input) ? this.uint(input) : this.f64(input);
       case "string":
         return this.str(input);
       case "boolean":
