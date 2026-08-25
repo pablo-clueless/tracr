@@ -8,6 +8,12 @@ export interface TracrPluginOptions {
   sinks: SinkSpec[];
   /** Identifier the transform emits calls against. */
   runtimeGlobal: string;
+  /**
+   * First site ID this file may assign. Per-file numbering restarts at 1 by
+   * default; an agent loading many files offsets each one so IDs stay unique
+   * within a process.
+   */
+  siteIdBase: number;
   /** Where the site side table is written. Nothing is emitted when null. */
   siteTableOut: string | null;
 }
@@ -18,6 +24,7 @@ export const defaultOptions: TracrPluginOptions = {
   sources: [],
   sinks: [],
   runtimeGlobal: "__tracr",
+  siteIdBase: 0,
   siteTableOut: null,
 };
 

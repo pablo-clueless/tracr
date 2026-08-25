@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "node --import tracr/register --experimental-strip-types src/server.ts",
+    "dev": "node --import @pablo_clueless/tracr/register --experimental-strip-types src/server.ts",
     "start": "node --experimental-strip-types src/server.ts",
     "typecheck": "tsc -b"
   },

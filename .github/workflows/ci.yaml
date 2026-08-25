@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [20, 22, 24]
+        node: [22, 24]
     steps:
       - uses: actions/checkout@v4
 
@@ -57,6 +57,28 @@ jobs:
             echo "tracr leaked into the production bundle" >&2
             exit 1
           fi
+
+  gates:
+    name: Phase gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+      # Phase 0: the derivation chain survives Express's own dispatch.
+      - run: pnpm gate
+
+      # Phase 1: untainted Express under 5x baseline, HMR under 500ms. Both
+      # benchmarks assert the transform is actually live before reporting, so a
+      # silently disabled agent fails here instead of posting a perfect score.
+      - run: pnpm bench
 
   rust:
     name: Rust core

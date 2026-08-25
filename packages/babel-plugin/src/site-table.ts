@@ -6,12 +6,13 @@ import type { SiteId, SiteInfo, SiteTable } from "@pablo_clueless/protocol";
  */
 export class SiteTableBuilder {
   private readonly sites: SiteInfo[] = [];
-  private next = 1;
+  private next: number;
 
   private readonly runId: number;
 
-  constructor(runId: number) {
+  constructor(runId: number, siteIdBase = 0) {
     this.runId = runId;
+    this.next = siteIdBase + 1;
   }
 
   assign(file: string, line: number, col: number, fnName: string | null): SiteId {

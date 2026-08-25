@@ -1,7 +1,7 @@
 import express from "express";
 import type { NextFunction, Request, Response } from "express";
 
-import { query } from "./db.js";
+import { query } from "./db.ts";
 
 const app = express();
 app.use(express.json());
@@ -34,6 +34,16 @@ app.post("/users/search", normalize, (req: SearchRequest, res: Response) => {
   res.json({ rows });
 });
 
-app.listen(3000, () => {
-  process.stdout.write("example-express-api listening on :3000\n");
+/**
+ * Touches no declared source, so every label stays 0 and the runtime's
+ * short-circuits do all the work. This is the route the Phase 1 latency gate
+ * measures: instrumented must stay under 5x baseline here.
+ */
+app.get("/health", (_req: Request, res: Response) => {
+  res.json({ ok: true });
+});
+
+const port = Number(process.env.PORT ?? 3000);
+app.listen(port, () => {
+  process.stdout.write(`example-express-api listening on :${port}\n`);
 });

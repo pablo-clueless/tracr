@@ -6,7 +6,8 @@
     "noEmit": true,
     "composite": false,
     "declaration": false,
-    "declarationMap": false
+    "declarationMap": false,
+    "allowImportingTsExtensions": true
   },
   "include": ["src/**/*.ts", "tracr.config.ts"]
 }

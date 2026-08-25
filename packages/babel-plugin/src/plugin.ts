@@ -102,7 +102,7 @@ export const tracrBabelPlugin = (
 
     pre(file) {
       const filename = (file as { opts?: { filename?: string } }).opts?.filename ?? "<unknown>";
-      const sites = new SiteTableBuilder(0);
+      const sites = new SiteTableBuilder(0, options.siteIdBase);
       const shadows = new ShadowRegistry();
 
       this.tracr = {
