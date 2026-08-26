@@ -1,4 +1,4 @@
-import type { SinkSpec, SourceSpec } from "@pablo_clueless/protocol";
+import type { ShimSpec, SinkSpec, SourceSpec } from "@pablo_clueless/protocol";
 
 export interface TracrPluginOptions {
   /** Micromatch globs. `node_modules` is always excluded. */
@@ -6,6 +6,8 @@ export interface TracrPluginOptions {
   exclude: string[];
   sources: SourceSpec[];
   sinks: SinkSpec[];
+  /** Framework bindings whose imports are redirected to an instrumented stand-in. */
+  shims: ShimSpec[];
   /** Identifier the transform emits calls against. */
   runtimeGlobal: string;
   /**
@@ -23,6 +25,7 @@ export const defaultOptions: TracrPluginOptions = {
   exclude: ["**/node_modules/**", "**/dist/**"],
   sources: [],
   sinks: [],
+  shims: [],
   runtimeGlobal: "__tracr",
   siteIdBase: 0,
   siteTableOut: null,

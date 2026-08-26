@@ -192,6 +192,65 @@ export const tracrBabelPlugin = (
         },
       },
 
+      // ----------------------------------------------------------------- shims
+      /**
+       * `import { useState, useEffect } from "react"` becomes
+       * `import { useEffect } from "react"; import { useState } from "<via>"`.
+       *
+       * Only the shimmed names move. Redirecting the whole module would mean
+       * the stand-in has to re-export every binding the framework has, forever;
+       * splitting the declaration keeps the blast radius to the named hooks.
+       *
+       * A default import (`import React from "react"`, then `React.useState`)
+       * is deliberately left alone — the member call is not an import binding,
+       * so there is nothing here to rewrite.
+       */
+      ImportDeclaration(path) {
+        const { options, done } = this.tracr;
+        if (done.has(path.node)) return;
+
+        const source = path.node.source.value;
+        const applicable = options.shims.filter(
+          (shim) => shim.module === source && shim.via !== undefined,
+        );
+        if (applicable.length === 0) return;
+
+        const via = new Map(applicable.map((shim) => [shim.export, shim.via as string]));
+        const moved = new Map<string, t.ImportSpecifier[]>();
+        const kept: typeof path.node.specifiers = [];
+
+        for (const specifier of path.node.specifiers) {
+          if (specifier.type !== "ImportSpecifier") {
+            kept.push(specifier);
+            continue;
+          }
+          const name =
+            specifier.imported.type === "Identifier"
+              ? specifier.imported.name
+              : specifier.imported.value;
+          const target = via.get(name);
+          if (target === undefined) {
+            kept.push(specifier);
+            continue;
+          }
+          moved.set(target, [...(moved.get(target) ?? []), specifier]);
+        }
+
+        if (moved.size === 0) return;
+        done.add(path.node);
+
+        const redirected = [...moved].map(([target, specifiers]) =>
+          types.importDeclaration(specifiers, types.stringLiteral(target)),
+        );
+
+        if (kept.length === 0) {
+          path.replaceWithMultiple(redirected);
+          return;
+        }
+        path.node.specifiers = kept;
+        path.insertAfter(redirected);
+      },
+
       // ---------------------------------------------------------- declarations
       VariableDeclaration(path) {
         const { labels, shadows, done, generated } = this.tracr;
@@ -202,9 +261,58 @@ export const tracrBabelPlugin = (
         const parent = path.parentPath;
         if (parent.isForXStatement() && parent.node.left === path.node) return;
 
+        // Rebuilt rather than appended to: a destructured pattern needs its
+        // initialiser hoisted into a temp *before* the pattern that reads it,
+        // and declarators evaluate left to right.
+        const rebuilt: t.VariableDeclarator[] = [];
         const extra: t.VariableDeclarator[] = [];
 
+        /**
+         * `const [a, b] = expr` becomes
+         * `const _d = expr, [a, b] = _d, a$t = readAnchor(_d, 0), b$t = ...`.
+         *
+         * Element labels come from per-index anchors rather than the container's
+         * own label, because a tuple's elements are not interchangeable: a shim
+         * that taints `[value, setValue]` means the value, not the setter.
+         * `readAnchor` on a primitive is a WeakMap miss, so a non-object
+         * initialiser costs one lookup and yields untainted.
+         */
+        const destructure = (
+          declarator: t.VariableDeclarator,
+          pattern: t.ArrayPattern,
+          into: t.VariableDeclarator[],
+        ): t.VariableDeclarator[] => {
+          const temp = path.scope.generateUidIdentifier("d");
+          generated.add(temp.name);
+
+          const hoisted = types.variableDeclarator(temp, declarator.init as t.Expression);
+          declarator.init = types.cloneNode(temp);
+
+          pattern.elements.forEach((element, index) => {
+            // Holes and rest elements carry no single label.
+            if (element === null || element.type !== "Identifier") return;
+            if (isGenerated(element.name, generated)) return;
+
+            shadows.declare(path.scope, element.name);
+            into.push(
+              types.variableDeclarator(
+                types.identifier(shadowName(element.name)),
+                labels.call("readAnchor", [types.cloneNode(temp), types.numericLiteral(index)]),
+              ),
+            );
+          });
+
+          return [hoisted, declarator];
+        };
+
         for (const declarator of path.node.declarations) {
+          if (declarator.id.type === "ArrayPattern" && declarator.init != null) {
+            rebuilt.push(...destructure(declarator, declarator.id, extra));
+            continue;
+          }
+
+          rebuilt.push(declarator);
+
           if (declarator.id.type !== "Identifier") continue;
           if (isGenerated(declarator.id.name, generated)) continue;
 
@@ -220,7 +328,7 @@ export const tracrBabelPlugin = (
         }
 
         if (extra.length === 0) return;
-        path.node.declarations.push(...extra);
+        path.node.declarations = [...rebuilt, ...extra];
       },
 
       // ----------------------------------------------------------- assignments

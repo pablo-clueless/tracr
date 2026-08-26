@@ -8,6 +8,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./shim": {
+      "types": "./dist/shim.d.ts",
+      "default": "./dist/shim.js"
     }
   },
   "main": "./dist/index.js",
@@ -25,6 +29,10 @@
     "@pablo_clueless/runtime": "workspace:*"
   },
   "peerDependencies": {
-    "react": "^18.0.0 || ^19.0.0"
+    "react": ">=18"
+  },
+  "devDependencies": {
+    "react": "^19.2.8",
+    "@types/react": "^19.2.8"
   }
 }

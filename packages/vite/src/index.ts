@@ -130,6 +130,7 @@ export const tracr = (options: TracrViteOptions = {}): VitePluginShape | null =>
         ...pluginOptions,
         sources: pluginOptions.sources ?? project.sources,
         sinks: pluginOptions.sinks ?? project.sinks,
+        shims: pluginOptions.shims ?? project.shims,
       });
       filter = createFilter(include ?? project.include, exclude ?? project.exclude);
     },

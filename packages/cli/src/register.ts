@@ -21,6 +21,7 @@ const data: LoaderData = {
   exclude: config.exclude,
   sources: config.sources,
   sinks: config.sinks,
+  shims: config.shims,
 };
 
 register("./loader.js", pathToFileURL(import.meta.filename), { data });

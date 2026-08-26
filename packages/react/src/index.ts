@@ -8,6 +8,9 @@ const sinks: SinkSpec[] = [
   { id: "dom.innerHTML", module: "*", path: "Element.innerHTML" },
 ];
 
+/** Where the transform redirects a shimmed import to. */
+const SHIM_MODULE = "@pablo_clueless/react/shim";
+
 /**
  * React stores `useState` values in the fiber. A primitive has nowhere to hang a
  * label and the shadow local is gone by the next render, so these three are
@@ -16,9 +19,9 @@ const sinks: SinkSpec[] = [
  * Props and context need no shim: they are objects, so the WeakMap anchors them.
  */
 const shims: ShimSpec[] = [
-  { id: "react.useState", module: "react", export: "useState" },
-  { id: "react.useReducer", module: "react", export: "useReducer" },
-  { id: "react.useRef", module: "react", export: "useRef" },
+  { id: "react.useState", module: "react", export: "useState", via: SHIM_MODULE },
+  { id: "react.useReducer", module: "react", export: "useReducer", via: SHIM_MODULE },
+  { id: "react.useRef", module: "react", export: "useRef", via: SHIM_MODULE },
 ];
 
 export const reactAdapter: TracrAdapter = {
