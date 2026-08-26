@@ -174,8 +174,12 @@ importers:
       '@pablo_clueless/runtime':
         specifier: workspace:*
         version: link:../runtime
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.8
+        version: 19.2.18
       react:
-        specifier: ^18.0.0 || ^19.0.0
+        specifier: ^19.2.8
         version: 19.2.8
 
   packages/runtime:

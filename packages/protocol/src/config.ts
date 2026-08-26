@@ -23,6 +23,8 @@ export interface ShimSpec {
   id: string;
   module: string;
   export: string;
+  /** Module to import this binding from instead. Without it the shim is inert. */
+  via?: string;
 }
 
 export interface TracrAdapter {
