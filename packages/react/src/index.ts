@@ -1,8 +1,7 @@
 import type { ShimSpec, SinkSpec, SourceSpec, TracrAdapter } from "@pablo_clueless/protocol";
 
-const sources: SourceSpec[] = [
-  { id: "react.input.value", module: "*", path: "event.target.value" },
-];
+/** The handler binding is named by whoever wrote it, so the root is a wildcard. */
+const sources: SourceSpec[] = [{ id: "react.input.value", module: "*", path: "*.target.value" }];
 
 const sinks: SinkSpec[] = [
   { id: "fetch.body", module: "*", path: "fetch", args: [1] },
