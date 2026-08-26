@@ -1,5 +1,4 @@
 import { FrameType, type AgentEvent, type AgentHello } from "@pablo_clueless/protocol";
-
 import { encodeMsgPack } from "./msgpack.js";
 
 export const encodeHello = (hello: AgentHello): Uint8Array =>

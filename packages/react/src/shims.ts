@@ -1,7 +1,7 @@
 import * as React from "react";
 
-import type { Label } from "@pablo_clueless/protocol";
 import type { TracrRuntime } from "@pablo_clueless/runtime";
+import type { Label } from "@pablo_clueless/protocol";
 
 const runtime = (): TracrRuntime | undefined => (globalThis as { __tracr?: TracrRuntime }).__tracr;
 

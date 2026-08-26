@@ -10,8 +10,8 @@
  * Requests are sequential on purpose — this measures latency, not throughput.
  */
 import { spawn } from "node:child_process";
-import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const APP = join(HERE, "..", "examples", "express-api");

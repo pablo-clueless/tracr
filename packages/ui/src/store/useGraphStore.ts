@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import type { CoreDelta, Skeleton } from "@pablo_clueless/protocol";
 
+import type { CoreDelta, Skeleton } from "@pablo_clueless/protocol";
 import {
   applyDelta,
   applySkeleton,
@@ -14,6 +14,8 @@ interface GraphState {
   level: NodeLevel;
   /** Total events the agent discarded. Surfaced in the UI: silent loss destroys trust. */
   dropped: number;
+  /** Flows naming a site the skeleton lacks — the static parse and the run disagree. */
+  unresolved: number;
   connected: boolean;
   selectedEdge: string | null;
   version: number;
@@ -29,6 +31,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   graph: createGraph(),
   level: "file",
   dropped: 0,
+  unresolved: 0,
   connected: false,
   selectedEdge: null,
   version: 0,
@@ -44,6 +47,10 @@ export const useGraphStore = create<GraphState>((set, get) => ({
 
   ingestDelta: (delta) => {
     applyDelta(get().graph, delta);
-    set((state) => ({ version: state.version + 1, dropped: delta.droppedTotal }));
+    set((state) => ({
+      version: state.version + 1,
+      dropped: delta.droppedTotal,
+      unresolved: delta.unresolved,
+    }));
   },
 }));

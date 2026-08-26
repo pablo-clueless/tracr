@@ -22,6 +22,7 @@
     "format:check": "prettier --check .",
     "core:build": "cargo build -p tracr-core",
     "core:test": "cargo test -p tracr-core",
+    "core:fixtures": "node scripts/gen-wire-fixtures.mjs",
     "ui:dev": "pnpm --filter @pablo_clueless/ui dev",
     "example:react": "pnpm --filter @pablo_clueless/example-react-vite dev",
     "example:vue": "pnpm --filter @pablo_clueless/example-vue-vite dev",

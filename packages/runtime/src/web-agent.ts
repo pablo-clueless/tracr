@@ -1,6 +1,5 @@
-import { PROTOCOL_VERSION } from "@pablo_clueless/protocol";
-
 import { install, type RuntimeOptions, type TracrRuntime } from "./runtime.js";
+import { PROTOCOL_VERSION } from "@pablo_clueless/protocol";
 import { wsTransport } from "./transport-ws.js";
 
 let warned = false;

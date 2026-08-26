@@ -1,6 +1,6 @@
-import { Visualizer } from "./graph/Visualizer";
-import { useCoreSocket } from "./lib/useCoreSocket";
 import { useGraphStore } from "./store/useGraphStore";
+import { useCoreSocket } from "./lib/useCoreSocket";
+import { Visualizer } from "./graph/Visualizer";
 
 const CORE_URL = "ws://localhost:7331";
 

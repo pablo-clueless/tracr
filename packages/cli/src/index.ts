@@ -1,3 +1,5 @@
+export { resolveCoreBinary, startDaemon, type DaemonHandle } from "./daemon.js";
+export type { LoaderData } from "./loader.js";
 export {
   defineConfig,
   defaultConfig,
@@ -5,5 +7,3 @@ export {
   resolveSocketPath,
   type TracrConfig,
 } from "./config.js";
-export { resolveCoreBinary, startDaemon, type DaemonHandle } from "./daemon.js";
-export type { LoaderData } from "./loader.js";

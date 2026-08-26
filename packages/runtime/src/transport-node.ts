@@ -1,9 +1,9 @@
 import { connect, type Socket } from "node:net";
 
-import { frameStream } from "./msgpack.js";
+import { encodeBatch, encodeHello } from "./encode.js";
 import { PendingQueue } from "./pending-queue.js";
 import type { Transport } from "./transport.js";
-import { encodeBatch, encodeHello } from "./encode.js";
+import { frameStream } from "./msgpack.js";
 
 export interface NodeTransportOptions {
   /** Unix socket path, or a `\\.\pipe\` name on Windows. */

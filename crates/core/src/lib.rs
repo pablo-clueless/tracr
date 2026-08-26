@@ -7,7 +7,10 @@
 
 pub mod aggregate;
 pub mod dag;
+pub mod emit;
+pub mod ingest;
 pub mod skeleton;
+pub mod wire;
 
 /// Reserved. Every operation must short-circuit on this before doing any work.
 pub const UNTAINTED: u32 = 0;
