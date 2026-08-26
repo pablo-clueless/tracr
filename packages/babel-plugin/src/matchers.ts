@@ -35,6 +35,31 @@ export interface SourceMatch {
 }
 
 /**
+ * Whether a read matches one declared source path.
+ *
+ * A leading `*.` stands for exactly one identifier. DOM event sources need it:
+ * the binding is named by whoever wrote the handler, so the same source arrives
+ * as `event.target.value` by hand, `$event.target.value` from a compiled Vue
+ * template, and `e.target.value` from most React code. Matching those by
+ * literal root name would mean declaring every spelling anyone might pick.
+ *
+ * One segment, not a suffix match: `*.target.value` must not quietly claim
+ * `form.state.target.value`.
+ */
+const matchesPath = (path: string, specPath: string): boolean => {
+  if (!specPath.startsWith("*.")) {
+    return path === specPath || path.startsWith(`${specPath}.`);
+  }
+
+  const tail = specPath.slice(2);
+  const dot = path.indexOf(".");
+  if (dot === -1) return false;
+
+  const rest = path.slice(dot + 1);
+  return rest === tail || rest.startsWith(`${tail}.`);
+};
+
+/**
  * A declared source taints everything reachable underneath it: declaring
  * `req.body` must make `req.body.name` an origin too. The longest declared
  * prefix wins, so a more specific declaration can override a broader one.
@@ -43,7 +68,7 @@ export const matchSource = (path: string, sources: SourceSpec[]): SourceMatch | 
   let best: SourceMatch | null = null;
 
   sources.forEach((spec, sourceId) => {
-    if (path !== spec.path && !path.startsWith(`${spec.path}.`)) return;
+    if (!matchesPath(path, spec.path)) return;
     if (best === null || spec.path.length > best.spec.path.length) {
       best = { sourceId, spec };
     }

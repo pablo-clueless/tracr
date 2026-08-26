@@ -1,6 +1,10 @@
 import type { SinkSpec, SourceSpec, TracrAdapter } from "@pablo_clueless/protocol";
 
-const sources: SourceSpec[] = [{ id: "vue.input.value", module: "*", path: "event.target.value" }];
+/**
+ * The handler binding is named by whoever wrote it — `$event` from a compiled
+ * template, `e` or `event` by hand — so the root segment is a wildcard.
+ */
+const sources: SourceSpec[] = [{ id: "vue.input.value", module: "*", path: "*.target.value" }];
 
 const sinks: SinkSpec[] = [
   { id: "fetch.body", module: "*", path: "fetch", args: [1] },
