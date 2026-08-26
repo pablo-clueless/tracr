@@ -127,14 +127,14 @@ pnpm example:vue
 
 Each phase has a gate that must hold before the next one starts.
 
-| Phase         | Scope                                       | Gate                                                             |
-| ------------- | ------------------------------------------- | ---------------------------------------------------------------- |
-| 0 — spike ✅  | Babel plugin only, console-dump the DAG     | `req.body.name` → `db.query` chains _through_ Express middleware |
-| 1 — agents ✅ | Node loader hook, Vite plugin, transport    | Express under 5x baseline; HMR still under 500ms                 |
-| 2 — adapters  | Vue first (no shims), then React hook shims | Typed input reaches a `fetch` body with provenance intact        |
-| 3 — core      | Rust daemon owns the DAG and the skeleton   | Sustains agent event rate, bounded memory over 10 minutes        |
-| 4 — UI        | graphology → worker → Cytoscape, ~2k cap    | Live updates without layout thrash under load                    |
-| 5 — expansion | SWC port (Next.js) or a Go agent            | Zero changes needed in `crates/core` or the UI                   |
+| Phase           | Scope                                       | Gate                                                             |
+| --------------- | ------------------------------------------- | ---------------------------------------------------------------- |
+| 0 — spike ✅    | Babel plugin only, console-dump the DAG     | `req.body.name` → `db.query` chains _through_ Express middleware |
+| 1 — agents ✅   | Node loader hook, Vite plugin, transport    | Express under 5x baseline; HMR still under 500ms                 |
+| 2 — adapters ✅ | Vue first (no shims), then React hook shims | Typed input reaches a `fetch` body with provenance intact        |
+| 3 — core        | Rust daemon owns the DAG and the skeleton   | Sustains agent event rate, bounded memory over 10 minutes        |
+| 4 — UI          | graphology → worker → Cytoscape, ~2k cap    | Live updates without layout thrash under load                    |
+| 5 — expansion   | SWC port (Next.js) or a Go agent            | Zero changes needed in `crates/core` or the UI                   |
 
 Deliberately out of scope for v1: async context propagation, full cross-process taint,
 implicit flows, flamegraphs, time-travel replay, Vue template-line attribution, and
