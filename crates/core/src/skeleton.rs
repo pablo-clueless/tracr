@@ -76,7 +76,9 @@ impl Skeleton {
 
         let mut by_endpoints = HashMap::with_capacity(edges.len());
         for edge in &edges {
-            by_endpoints.entry((edge.source, edge.target)).or_insert(edge.id);
+            by_endpoints
+                .entry((edge.source, edge.target))
+                .or_insert(edge.id);
         }
 
         Self {

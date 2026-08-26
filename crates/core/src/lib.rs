@@ -7,6 +7,7 @@
 
 pub mod aggregate;
 pub mod dag;
+pub mod emit;
 pub mod ingest;
 pub mod skeleton;
 pub mod wire;

@@ -115,7 +115,8 @@ pub fn roll_up(
     let mut unresolved = 0;
 
     for &((from, to), count) in flows {
-        let (Some(source), Some(target)) = (skeleton.resolve(from, kind), skeleton.resolve(to, kind))
+        let (Some(source), Some(target)) =
+            (skeleton.resolve(from, kind), skeleton.resolve(to, kind))
         else {
             unresolved += count;
             continue;
@@ -168,7 +169,9 @@ pub fn roll_up(
     // Stable order throughout: a delta is only meaningful against a fixed one.
     rollup.edges.sort_by_key(|edge| edge.edge);
     rollup.internal.sort_by_key(|&(node, _)| node);
-    rollup.unmapped.sort_by_key(|flow| (flow.source, flow.target));
+    rollup
+        .unmapped
+        .sort_by_key(|flow| (flow.source, flow.target));
     rollup.sinks.sort_by_key(|sinks| sinks.node);
     rollup
 }
@@ -181,15 +184,47 @@ pub struct EdgeDelta {
     pub tainted: bool,
 }
 
+/// Everything that moved since the last frame.
+///
+/// `unresolved` and `dropped_total` are running totals rather than diffs: they
+/// are counters the UI displays as-is, and a person watching them wants the
+/// number, not the increment.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Delta {
+    pub edges: Vec<EdgeDelta>,
+    pub unmapped: Vec<UnmappedFlow>,
+    pub internal: Vec<(NodeId, u64)>,
+    pub sinks: Vec<NodeSinks>,
+    pub dropped_total: u64,
+    pub unresolved: u64,
+}
+
+impl Delta {
+    /// Whether there is anything worth sending. A quiet frame costs a wakeup on
+    /// the UI thread and a layout pass; skipping it is the whole point.
+    pub fn is_empty(&self) -> bool {
+        self.edges.is_empty()
+            && self.unmapped.is_empty()
+            && self.internal.is_empty()
+            && self.sinks.is_empty()
+    }
+}
+
 /// Skeleton once, then deltas.
 ///
 /// Ingest only counts a flow whose label survives translation, so an edge
 /// appearing here at all means tainted data crossed it — `tainted` is carried
 /// anyway because the UI's contract has the field and a future untainted-flow
 /// count would land in the same shape.
+///
+/// Every map is keyed on skeleton nodes or edges, so what the tracker remembers
+/// is bounded by the topology exactly like the rollup that feeds it.
 #[derive(Default)]
 pub struct DeltaTracker {
-    sent: HashMap<EdgeId, u64>,
+    edges: HashMap<EdgeId, u64>,
+    unmapped: HashMap<(NodeId, NodeId), u64>,
+    internal: HashMap<NodeId, u64>,
+    sinks: HashMap<NodeId, (u32, u64)>,
     dropped: u64,
 }
 
@@ -198,19 +233,21 @@ impl DeltaTracker {
         Self::default()
     }
 
-    /// Edges that changed since the last call, plus the current dropped total.
+    /// What changed since the last call.
     ///
-    /// An edge missing from `rollup` is not emitted as a zero: counts only ever
-    /// climb, so absence means "capped out of this frame", and reporting that
-    /// as a reset would make the UI flicker under load.
-    pub fn diff(&mut self, rollup: &Rollup, dropped: u64) -> (Vec<EdgeDelta>, u64) {
-        let mut changed = Vec::new();
+    /// An entry missing from `rollup` is not emitted as a zero: counts only ever
+    /// climb, so absence means "capped out of this frame", and reporting that as
+    /// a reset would make the UI flicker under load.
+    pub fn diff(&mut self, rollup: &Rollup, dropped: u64) -> Delta {
+        let mut delta = Delta {
+            dropped_total: dropped,
+            unresolved: rollup.unresolved,
+            ..Delta::default()
+        };
 
         for edge in &rollup.edges {
-            let last = self.sent.get(&edge.edge).copied().unwrap_or(0);
-            if last != edge.count {
-                self.sent.insert(edge.edge, edge.count);
-                changed.push(EdgeDelta {
+            if self.edges.insert(edge.edge, edge.count) != Some(edge.count) {
+                delta.edges.push(EdgeDelta {
                     edge: edge.edge,
                     count: edge.count,
                     tainted: true,
@@ -218,8 +255,28 @@ impl DeltaTracker {
             }
         }
 
+        for flow in &rollup.unmapped {
+            let key = (flow.source, flow.target);
+            if self.unmapped.insert(key, flow.count) != Some(flow.count) {
+                delta.unmapped.push(*flow);
+            }
+        }
+
+        for &(node, count) in &rollup.internal {
+            if self.internal.insert(node, count) != Some(count) {
+                delta.internal.push((node, count));
+            }
+        }
+
+        for sinks in &rollup.sinks {
+            let seen = (sinks.sites, sinks.count);
+            if self.sinks.insert(sinks.node, seen) != Some(seen) {
+                delta.sinks.push(*sinks);
+            }
+        }
+
         self.dropped = dropped;
-        (changed, dropped)
+        delta
     }
 
     /// Total events the agents admitted to discarding, as last reported.
@@ -230,6 +287,9 @@ impl DeltaTracker {
     /// Forgets what the UI has seen, so the next diff is a full resend. Used
     /// when a client reconnects and needs the skeleton and counts again.
     pub fn reset(&mut self) {
-        self.sent.clear();
+        self.edges.clear();
+        self.unmapped.clear();
+        self.internal.clear();
+        self.sinks.clear();
     }
 }
