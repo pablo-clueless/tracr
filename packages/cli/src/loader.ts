@@ -58,7 +58,7 @@ let root = process.cwd();
 
 try {
   runtimeUrl = pathToFileURL(
-    createRequire(import.meta.url).resolve("@pablo_clueless/runtime"),
+    createRequire(import.meta.url).resolve("@pablo_clueless/runtime/node"),
   ).href;
 } catch {
   // Runtime unresolvable: stay a pass-through rather than break the host.
