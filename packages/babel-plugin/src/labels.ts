@@ -1,13 +1,13 @@
+import { CombineOp, type SiteId } from "@pablo_clueless/protocol";
 import type { NodePath } from "@babel/traverse";
 import type * as BabelTypes from "@babel/types";
 import type * as t from "@babel/types";
-import { CombineOp, type SiteId } from "@pablo_clueless/protocol";
 
-import { dottedPath, matchSource } from "./matchers.js";
-import { lookupBuiltin } from "./summaries.js";
 import { shadowName, type ShadowRegistry } from "./shadow.js";
+import { dottedPath, matchSource } from "./matchers.js";
 import type { SiteTableBuilder } from "./site-table.js";
 import type { TracrPluginOptions } from "./options.js";
+import { lookupBuiltin } from "./summaries.js";
 
 export interface LabelContext {
   types: typeof BabelTypes;

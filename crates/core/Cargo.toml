@@ -15,3 +15,5 @@ name = "tracr_core"
 path = "src/lib.rs"
 
 [dependencies]
+rmp = "0.8.14"
+serde = { version = "1.0.229", features = ["derive"] }

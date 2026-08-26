@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { loadConfig } from "./config.js";
 import { startDaemon } from "./daemon.js";
+import { loadConfig } from "./config.js";
 
 const USAGE = `tracr <command>
 

@@ -1,5 +1,5 @@
-import { register } from "node:module";
 import { pathToFileURL } from "node:url";
+import { register } from "node:module";
 
 import { loadConfig, resolveSocketPath } from "./config.js";
 import type { LoaderData } from "./loader.js";

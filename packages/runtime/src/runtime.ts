@@ -1,3 +1,8 @@
+import { anchor, anchorSelf, readAnchor, readSelf, reanchor } from "./anchor.js";
+import { nullTransport, type Transport } from "./transport.js";
+import { RingBuffer } from "./ring-buffer.js";
+import { formatChain } from "./explain.js";
+import { Interner } from "./interner.js";
 import {
   CombineOp,
   EventTag,
@@ -9,12 +14,6 @@ import {
   type SiteInfo,
   type SiteTable,
 } from "@pablo_clueless/protocol";
-
-import { anchor, anchorSelf, readAnchor, readSelf, reanchor } from "./anchor.js";
-import { nullTransport, type Transport } from "./transport.js";
-import { RingBuffer } from "./ring-buffer.js";
-import { formatChain } from "./explain.js";
-import { Interner } from "./interner.js";
 
 export interface RuntimeOptions {
   bufferSize: number;

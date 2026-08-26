@@ -8,9 +8,9 @@
  * and without the plugin, because an absolute budget alone hides a regression
  * that is really the machine being slow.
  */
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 
 const HERE = dirname(fileURLToPath(import.meta.url));

@@ -1,3 +1,4 @@
+import type { Interner } from "./interner.js";
 import {
   CombineOp,
   DagNodeKind,
@@ -7,8 +8,6 @@ import {
   type SiteId,
   type SiteInfo,
 } from "@pablo_clueless/protocol";
-
-import type { Interner } from "./interner.js";
 
 export interface ChainStep {
   label: Label;

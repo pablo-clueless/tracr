@@ -1,15 +1,14 @@
-import { writeFileSync } from "node:fs";
-
 import type { PluginObj, PluginPass } from "@babel/core";
 import type * as BabelTypes from "@babel/types";
+import { writeFileSync } from "node:fs";
 import type * as t from "@babel/types";
-import { CombineOp } from "@pablo_clueless/protocol";
 
-import { LabelBuilder } from "./labels.js";
-import { ShadowRegistry, shadowName } from "./shadow.js";
-import { dottedPath, matchSink, sinkArgs } from "./matchers.js";
 import { resolveOptions, type TracrPluginOptions } from "./options.js";
+import { dottedPath, matchSink, sinkArgs } from "./matchers.js";
+import { ShadowRegistry, shadowName } from "./shadow.js";
+import { CombineOp } from "@pablo_clueless/protocol";
 import { SiteTableBuilder } from "./site-table.js";
+import { LabelBuilder } from "./labels.js";
 
 export interface TracrState {
   options: TracrPluginOptions;

@@ -1,4 +1,5 @@
 import { DirectedGraph } from "graphology";
+
 import type { CoreDelta, Skeleton } from "@pablo_clueless/protocol";
 
 export type NodeLevel = "callsite" | "file" | "function";
