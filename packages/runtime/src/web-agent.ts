@@ -1,5 +1,6 @@
 import { install, type RuntimeOptions, type TracrRuntime } from "./runtime.js";
-import { PROTOCOL_VERSION } from "@pablo_clueless/protocol";
+import { PROTOCOL_VERSION, sinkIdOf, type SinkSpec } from "@pablo_clueless/protocol";
+import { installFetchPropagation } from "./propagate.js";
 import { wsTransport } from "./transport-ws.js";
 
 let warned = false;
@@ -16,6 +17,17 @@ export interface WebAgentOptions extends Partial<RuntimeOptions> {
   url?: string | null;
   /** Print each sink's derivation chain to the console. */
   debug?: boolean;
+  /**
+   * Attach `x-tracr-labels` to outgoing `fetch` calls carrying tainted values.
+   *
+   * Off unless configured, and same-origin unless a host is named: the header
+   * carries internal ids, and an app talks to third parties that have no
+   * business receiving them.
+   *
+   * `sinks` must be the same array, in the same order, that the transform was
+   * given — ids are positions in it.
+   */
+  propagate?: { sinks: SinkSpec[]; sinkId?: string; allowHosts?: string[] };
 }
 
 /**
@@ -35,17 +47,37 @@ export const installWebAgent = (options: WebAgentOptions = {}): TracrRuntime => 
   if (started) return runtime;
   started = true;
 
+  // One id per tab, reused by the transport's hello and by any header this
+  // agent attaches, so the two name the same process.
+  const procId = Math.floor(Math.random() * 0x7fffffff);
+
   if (options.debug === true) {
     runtime.onSink = ({ label }) => {
       console.log(`[tracr]\n${runtime.explain(label)}`);
     };
   }
 
+  if (options.propagate !== undefined) {
+    const { sinks, sinkId = "fetch.body", allowHosts } = options.propagate;
+    const index = sinkIdOf(sinks, sinkId);
+    if (index === -1) {
+      warnOnce(`cannot propagate: no sink declared with id "${sinkId}"`);
+    } else {
+      installFetchPropagation({
+        runtime,
+        sinkId: index,
+        runId: 0,
+        procId,
+        allowHosts,
+      });
+    }
+  }
+
   if (transport !== undefined) {
     void runtime
       .start({
         runId: 0,
-        procId: Math.floor(Math.random() * 0x7fffffff),
+        procId,
         language: "javascript",
         platform: "browser",
         protocolVersion: PROTOCOL_VERSION,
