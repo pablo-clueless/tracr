@@ -10,7 +10,7 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "build": "tsc -b",
+    "build": "node api.js && tsc -b",
     "build:ui": "pnpm --filter @pablo_clueless/ui build",
     "clean": "tsc -b --clean && cargo clean",
     "typecheck": "tsc -b && pnpm --filter @pablo_clueless/ui --filter \"./examples/*\" typecheck",
