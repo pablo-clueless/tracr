@@ -1,9 +1,21 @@
 <script setup lang="ts">
 import { ref } from "vue";
 
+import type { User } from "./types";
+
 // ref() returns a RefImpl, so the WeakMap anchors the label and it survives
 // Vue's internals without a shim.
+const users = ref<User[]>([]);
 const name = ref("");
+
+const fetchUsers = async () => {
+  const response = await fetch("https://jsonplaceholder.typicode.com/users");
+  if (!response.ok) throw new Error(response.statusText);
+  const users = await response.json();
+  users.value = users;
+};
+
+fetchUsers();
 
 /**
  * Deliberately not `v-model`.
@@ -36,5 +48,10 @@ const search = async () => {
     <h1>tracr vue example</h1>
     <input :value="name" placeholder="name" @input="onInput" />
     <button @click="search">search</button>
+  </div>
+  <div>
+    <div v-for="user in users" :key="user.id">
+      <p>{{ user.name }}</p>
+    </div>
   </div>
 </template>

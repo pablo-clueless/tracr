@@ -10,3 +10,4 @@ export * from "./explain.js";
 export * from "./msgpack.js";
 export * from "./runtime.js";
 export * from "./anchor.js";
+export * from "./propagate.js";
