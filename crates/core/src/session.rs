@@ -13,6 +13,14 @@
 //! between cannot be translated, so they are counted and dropped rather than
 //! folded into whatever agent happened to be there.
 //!
+//! # One tracker per viewer
+//!
+//! Deltas are stateful: "what changed since you last heard" is a question about
+//! a particular listener. A single shared tracker would let the first UI client
+//! to tick consume the change and leave the second with nothing, so two open
+//! tabs would each show half a graph. Every subscriber carries its own tracker
+//! and its own granularity.
+//!
 //! # Why a tick, rather than emitting per event
 //!
 //! Agents send thousands of events a second and the UI can repaint sixty times
@@ -29,6 +37,9 @@ use crate::skeleton::{node_kind, Skeleton};
 use crate::wire::{decode_frame, Frame, FrameReader, WireError};
 
 pub type ConnId = u32;
+
+/// Identifies one UI viewer. Handed out by [`Session::subscribe`].
+pub type SubId = u32;
 
 /// The UI degrades past a few thousand elements, so the daemon caps before it
 /// sends rather than letting the renderer discover the limit on its own.
@@ -64,17 +75,41 @@ pub struct SessionStats {
     pub accepted: u64,
 }
 
+/// One viewer's state. What it has been told, and at what granularity.
+struct Subscriber {
+    tracker: DeltaTracker,
+    level: u8,
+    /// Counters as of the last frame sent, so a tick where only the dropped
+    /// total moved still reaches this viewer.
+    sent_totals: Option<(Totals, u64)>,
+}
+
+impl Subscriber {
+    fn new(level: u8) -> Self {
+        Self {
+            tracker: DeltaTracker::new(),
+            level,
+            sent_totals: None,
+        }
+    }
+
+    /// Forgets everything this viewer has been told, so its next tick resends
+    /// in full.
+    fn rewind(&mut self) {
+        self.tracker.reset();
+        self.sent_totals = None;
+    }
+}
+
 pub struct Session {
     core: Core,
     skeleton: Skeleton,
     connections: HashMap<ConnId, Connection>,
-    tracker: DeltaTracker,
-    level: u8,
+    subscribers: HashMap<SubId, Subscriber>,
+    next_sub: SubId,
+    default_level: u8,
     element_cap: usize,
     stats: SessionStats,
-    /// Counters as of the last frame sent, so a tick where only the dropped
-    /// total moved still reaches the UI.
-    sent_totals: Option<(Totals, u64)>,
 }
 
 impl Session {
@@ -83,16 +118,17 @@ impl Session {
             core: Core::new(),
             skeleton,
             connections: HashMap::new(),
-            tracker: DeltaTracker::new(),
-            level: node_kind::FILE,
+            subscribers: HashMap::new(),
+            next_sub: 0,
+            default_level: node_kind::FILE,
             element_cap: DEFAULT_ELEMENT_CAP,
             stats: SessionStats::default(),
-            sent_totals: None,
         }
     }
 
+    /// Granularity new subscribers start at.
     pub fn with_level(mut self, level: u8) -> Self {
-        self.level = level;
+        self.default_level = level;
         self
     }
 
@@ -109,8 +145,27 @@ impl Session {
         &self.core
     }
 
-    pub fn level(&self) -> u8 {
-        self.level
+    /// Registers a viewer. Its first tick carries everything, because it has
+    /// been told nothing yet.
+    pub fn subscribe(&mut self) -> SubId {
+        let id = self.next_sub;
+        self.next_sub += 1;
+        self.subscribers
+            .insert(id, Subscriber::new(self.default_level));
+        id
+    }
+
+    pub fn unsubscribe(&mut self, id: SubId) {
+        self.subscribers.remove(&id);
+    }
+
+    pub fn subscriber_count(&self) -> usize {
+        self.subscribers.len()
+    }
+
+    /// The granularity one viewer is rendering.
+    pub fn level(&self, id: SubId) -> Option<u8> {
+        self.subscribers.get(&id).map(|sub| sub.level)
     }
 
     pub fn connect(&mut self, id: ConnId) {
@@ -189,70 +244,79 @@ impl Session {
         }
     }
 
-    /// The granularity the UI is rendering.
+    /// Changes one viewer's granularity.
     ///
-    /// Resets the delta tracker: edge ids at one level mean nothing at another,
-    /// so what the UI has been told is void. The next tick resends in full.
-    pub fn set_level(&mut self, level: u8) {
-        if self.level != level {
-            self.level = level;
-            self.tracker.reset();
-            self.sent_totals = None;
+    /// Rewinds that viewer: edge ids at one level mean nothing at another, so
+    /// what it has been told is not merely stale, it describes a different
+    /// graph. Other viewers are untouched.
+    pub fn set_level(&mut self, id: SubId, level: u8) {
+        if let Some(sub) = self.subscribers.get_mut(&id) {
+            if sub.level != level {
+                sub.level = level;
+                sub.rewind();
+            }
         }
     }
 
     /// What a UI client needs before any delta can mean anything.
     ///
-    /// Resets the tracker for the same reason `set_level` does: a client that
-    /// just took the skeleton has seen no counts, so the next tick must carry
-    /// everything rather than only what moved since some earlier client.
-    pub fn skeleton_frame(&mut self) -> String {
-        self.tracker.reset();
-        self.sent_totals = None;
+    /// Rewinds that viewer for the same reason `set_level` does: a client
+    /// holding a fresh skeleton has seen no counts, so its next tick must carry
+    /// everything rather than only what moved since some earlier frame.
+    pub fn skeleton_frame(&mut self, id: SubId) -> String {
+        if let Some(sub) = self.subscribers.get_mut(&id) {
+            sub.rewind();
+        }
         encode_skeleton(&self.skeleton)
     }
 
     /// Replaces the static topology, e.g. after a rebuild changed the code.
-    /// The caller must send [`Session::skeleton_frame`] again.
+    ///
+    /// Rewinds every viewer and requires each to be sent a fresh skeleton: node
+    /// and edge ids are only meaningful against the skeleton that defined them.
     pub fn set_skeleton(&mut self, skeleton: Skeleton) {
         self.skeleton = skeleton;
-        self.tracker.reset();
-        self.sent_totals = None;
+        for sub in self.subscribers.values_mut() {
+            sub.rewind();
+        }
     }
 
-    /// The current rollup, capped, without touching delta state.
-    pub fn rollup(&self) -> Rollup {
+    /// The current rollup at `level`, capped, without touching delta state.
+    pub fn rollup(&self, level: u8) -> Rollup {
         let mut rollup = roll_up(
             &self.skeleton,
             &self.core.flows(),
             &self.core.sinks(),
-            self.level,
+            level,
         );
         rollup.cap_edges(self.element_cap);
         rollup
     }
 
-    /// One frame of change, or `None` when nothing moved.
+    /// One frame of change for one viewer, or `None` when nothing moved for it.
     ///
     /// Returning `None` is the common case on an idle app, and it matters: a
     /// frame the UI does not need still costs it a parse, a store write, and a
     /// layout pass.
-    pub fn tick(&mut self) -> Option<String> {
-        let rollup = self.rollup();
+    pub fn tick(&mut self, id: SubId) -> Option<String> {
+        let level = self.subscribers.get(&id)?.level;
+        let rollup = self.rollup(level);
         let totals = self.core.totals();
-        let delta = self.tracker.diff(&rollup, totals);
+
+        let sub = self.subscribers.get_mut(&id)?;
+        let delta = sub.tracker.diff(&rollup, totals);
 
         // The counters move independently of the graph: a run can drop events
         // or truncate chains during a tick where no edge count changed, and
         // that still has to reach the UI.
         let counters = (totals, delta.unresolved);
-        let counters_moved = self.sent_totals != Some(counters);
+        let counters_moved = sub.sent_totals != Some(counters);
 
         if delta.is_empty() && !counters_moved {
             return None;
         }
 
-        self.sent_totals = Some(counters);
+        sub.sent_totals = Some(counters);
         Some(encode_delta(&delta))
     }
 }

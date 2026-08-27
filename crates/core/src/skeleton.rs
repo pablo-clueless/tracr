@@ -18,7 +18,9 @@
 //! are ordered coarse-to-fine deliberately: a smaller `kind` is always further
 //! up the chain, which is what makes [`Skeleton::lift`] a simple loop.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+
+use serde::Deserialize;
 
 use crate::dag::SiteId;
 
@@ -140,5 +142,130 @@ impl Skeleton {
 
     pub fn is_empty(&self) -> bool {
         self.nodes.is_empty()
+    }
+}
+
+/// One row of the side table a transform emits alongside its output.
+///
+/// Deliberately language-neutral: a file, a position, and the name of the
+/// enclosing function is something a Go or C# frontend can produce as easily as
+/// the Babel pass, which is what keeps the protocol from growing a JavaScript
+/// shape.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SiteInfo {
+    pub site_id: SiteId,
+    pub file: String,
+    pub line: u32,
+    pub col: u32,
+    /// `None` for top-level code, which belongs to the file and no function.
+    pub fn_name: Option<String>,
+}
+
+/// What one transform unit emits. Matches `SiteTable` in `@tracr/protocol`.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SiteTable {
+    pub run_id: u32,
+    #[serde(default)]
+    pub sites: Vec<SiteInfo>,
+}
+
+impl Skeleton {
+    /// Builds the containment tree from the side table the transform already
+    /// emits.
+    ///
+    /// # Why this needs no second parse
+    ///
+    /// Every site already carries its file and its enclosing function name, so
+    /// file -> function -> call site is derivable from the table alone. A
+    /// dedicated parse would re-derive what the transform pass computed while
+    /// it was walking the tree anyway, and could disagree with it.
+    ///
+    /// # No edges
+    ///
+    /// The table records where code *is*, never what calls what, so this
+    /// declares no edges and says so rather than guessing. Every crossing the
+    /// run observes therefore arrives as `unmapped` — accurate, because the
+    /// parse made no prediction to contradict. A later call-graph pass adds
+    /// edges and shrinks `unmapped` back to the genuinely surprising ones.
+    ///
+    /// Ids are assigned in a fixed order — files, then functions, then call
+    /// sites, each sorted — so the same table always produces the same graph.
+    /// A viewer's deltas are keyed on these ids and would otherwise scramble
+    /// whenever the daemon restarted.
+    pub fn from_sites(sites: &[SiteInfo]) -> Self {
+        let mut files: BTreeMap<&str, NodeId> = BTreeMap::new();
+        // Keyed on (file, function): the same name in two files is two
+        // functions. Two same-named functions in one file do collapse, which is
+        // the limit of what a name-only table can distinguish.
+        let mut functions: BTreeMap<(&str, &str), NodeId> = BTreeMap::new();
+
+        for site in sites {
+            files.entry(&site.file).or_insert(0);
+            if let Some(name) = site.fn_name.as_deref() {
+                functions.entry((&site.file, name)).or_insert(0);
+            }
+        }
+
+        let mut nodes = Vec::with_capacity(files.len() + functions.len() + sites.len());
+        let mut next: NodeId = 1;
+
+        for (file, id) in files.iter_mut() {
+            *id = next;
+            next += 1;
+            nodes.push(SkeletonNode {
+                id: *id,
+                kind: node_kind::FILE,
+                label: (*file).to_owned(),
+                parent: None,
+                site: None,
+            });
+        }
+
+        for ((file, name), id) in functions.iter_mut() {
+            *id = next;
+            next += 1;
+            nodes.push(SkeletonNode {
+                id: *id,
+                kind: node_kind::FUNCTION,
+                label: (*name).to_owned(),
+                parent: files.get(file).copied(),
+                site: None,
+            });
+        }
+
+        let mut ordered: Vec<&SiteInfo> = sites.iter().collect();
+        ordered.sort_by_key(|site| site.site_id);
+
+        for site in ordered {
+            // Top-level code hangs off the file directly; there is no function
+            // frame for it to belong to.
+            let parent = match site.fn_name.as_deref() {
+                Some(name) => functions.get(&(site.file.as_str(), name)).copied(),
+                None => files.get(site.file.as_str()).copied(),
+            };
+
+            nodes.push(SkeletonNode {
+                id: next,
+                kind: node_kind::CALL_SITE,
+                label: format!("{}:{}", site.line, site.col),
+                parent,
+                site: Some(site.site_id),
+            });
+            next += 1;
+        }
+
+        Self::new(nodes, Vec::new())
+    }
+
+    pub fn from_site_table(table: &SiteTable) -> Self {
+        Self::from_sites(&table.sites)
+    }
+
+    /// Reads a site table as the transform wrote it.
+    pub fn from_site_table_json(json: &str) -> Result<Self, serde_json::Error> {
+        let table: SiteTable = serde_json::from_str(json)?;
+        Ok(Self::from_site_table(&table))
     }
 }
