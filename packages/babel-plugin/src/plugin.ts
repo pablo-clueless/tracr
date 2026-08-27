@@ -480,7 +480,11 @@ export const tracrBabelPlugin = (
         }
 
         if (sink !== null) {
-          const site = labels.site(path.node, calleePath);
+          // The enclosing function, not the callee. `fnName` is what the core
+          // builds file -> function -> call site containment from, so recording
+          // `query` here parented the sink to a function that does not exist in
+          // this file. The callee is already identified by `sinkId`.
+          const site = labels.site(path.node, labels.enclosingName(path));
           for (const index of sinkArgs(sink.spec, labelRefs.length)) {
             const ref = labelRefs[index];
             if (ref === undefined || labels.isUntainted(ref)) continue;

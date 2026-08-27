@@ -1,60 +1,57 @@
 //! The tracr daemon.
 //!
-//! Transport is still to come. Until it lands this drives a [`Session`] over a
-//! length-prefixed stream on stdin and writes UI frames to stdout, which is
-//! enough to run the core against a real agent and read what it emits.
+//! Agents connect to `/agent` and send events; the UI connects to anything else
+//! and receives the skeleton once, then deltas.
+//!
+//! ```text
+//! tracr-core [addr] [site-table.json]
+//! ```
+//!
+//! Without a site table every event names a site the skeleton has never heard
+//! of, and the daemon reports that as `unresolved` rather than drawing a graph
+//! it cannot justify.
 
-use std::io::{Read, Write};
-
+use tracr_core::serve::{self, AGENT_PATH};
 use tracr_core::session::Session;
 use tracr_core::skeleton::Skeleton;
 
-/// Frames per second sent to the UI. The renderer cannot use more, and holding
-/// events between ticks is what turns forty thousand increments into one edge
-/// count.
-const TICK_HZ: u64 = 20;
+const DEFAULT_ADDR: &str = "127.0.0.1:9231";
 
 fn main() {
-    // The static parse is not wired up yet, so every site resolves to nothing
-    // and the rollup reports it as unresolved rather than pretending otherwise.
-    let mut session = Session::new(Skeleton::default());
-    session.connect(0);
+    let mut args = std::env::args().skip(1);
+    let addr = args.next().unwrap_or_else(|| DEFAULT_ADDR.to_owned());
+    let table = args.next();
 
-    let mut stdin = std::io::stdin().lock();
-    let mut stdout = std::io::stdout().lock();
-    let mut buffer = [0u8; 64 * 1024];
-    let tick = std::time::Duration::from_millis(1000 / TICK_HZ);
-    let mut last = std::time::Instant::now();
-
-    loop {
-        match stdin.read(&mut buffer) {
-            Ok(0) => break,
-            Ok(read) => session.feed(0, &buffer[..read]),
+    let skeleton = match table.as_deref() {
+        Some(path) => match load(path) {
+            Ok(skeleton) => {
+                eprintln!("tracr-core: {} nodes from {path}", skeleton.nodes().len());
+                skeleton
+            }
             Err(error) => {
-                eprintln!("tracr-core: read failed: {error}");
-                break;
+                eprintln!("tracr-core: could not read {path}: {error}");
+                std::process::exit(1);
             }
+        },
+        None => {
+            eprintln!("tracr-core: no site table given, so every site is unresolved");
+            Skeleton::default()
         }
+    };
 
-        if last.elapsed() >= tick {
-            last = std::time::Instant::now();
-            if let Some(frame) = session.tick() {
-                if writeln!(stdout, "{frame}").is_err() {
-                    break;
-                }
-            }
-        }
+    let session = serve::shared(Session::new(skeleton));
+
+    eprintln!("tracr-core: listening on ws://{addr}");
+    eprintln!("tracr-core:   agents -> ws://{addr}{AGENT_PATH}");
+    eprintln!("tracr-core:   ui     -> ws://{addr}/");
+
+    if let Err(error) = serve::serve(session, addr.as_str()) {
+        eprintln!("tracr-core: could not listen on {addr}: {error}");
+        std::process::exit(1);
     }
+}
 
-    // Whatever the last tick did not cover, plus the counters, so a short run
-    // still reports what it saw.
-    if let Some(frame) = session.tick() {
-        let _ = writeln!(stdout, "{frame}");
-    }
-
-    let stats = session.stats();
-    eprintln!(
-        "tracr-core: {} frames accepted, {} malformed, {} unknown, {} before hello",
-        stats.accepted, stats.malformed, stats.unknown, stats.before_hello
-    );
+fn load(path: &str) -> Result<Skeleton, Box<dyn std::error::Error>> {
+    let json = std::fs::read_to_string(path)?;
+    Ok(Skeleton::from_site_table_json(&json)?)
 }

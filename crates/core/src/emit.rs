@@ -98,6 +98,7 @@ struct WireDelta {
     dropped_total: u64,
     unresolved: u64,
     truncated: u64,
+    lost: u64,
 }
 
 /// The static topology, sent once when a client attaches.
@@ -171,6 +172,7 @@ pub fn encode_delta(delta: &Delta) -> String {
         dropped_total: delta.dropped_total,
         unresolved: delta.unresolved,
         truncated: delta.truncated,
+        lost: delta.lost,
     };
 
     serde_json::to_string(&wire).expect("delta is plain data")

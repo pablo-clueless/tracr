@@ -1,0 +1,40 @@
+{
+  "runId": 0,
+  "sites": [
+    {
+      "siteId": 1,
+      "file": "src/routes.ts",
+      "line": 2,
+      "col": 28,
+      "fnName": "helper"
+    },
+    {
+      "siteId": 2,
+      "file": "src/routes.ts",
+      "line": 2,
+      "col": 35,
+      "fnName": "helper"
+    },
+    {
+      "siteId": 3,
+      "file": "src/routes.ts",
+      "line": 4,
+      "col": 22,
+      "fnName": "handler"
+    },
+    {
+      "siteId": 4,
+      "file": "src/routes.ts",
+      "line": 5,
+      "col": 56,
+      "fnName": "handler"
+    },
+    {
+      "siteId": 5,
+      "file": "src/routes.ts",
+      "line": 5,
+      "col": 9,
+      "fnName": "handler"
+    }
+  ]
+}

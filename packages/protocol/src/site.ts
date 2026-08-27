@@ -20,6 +20,13 @@ export interface SiteInfo {
   file: string;
   line: number;
   col: number;
+  /**
+   * The function this site sits *inside*, never the one it calls. The core
+   * builds file -> function -> call site containment from it, so a callee name
+   * here invents a function that the file does not define.
+   *
+   * `null` for top-level code, which belongs to the file and no function.
+   */
   fnName: string | null;
 }
 

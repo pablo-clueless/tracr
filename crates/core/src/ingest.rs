@@ -43,34 +43,130 @@ pub struct SinkHit {
     pub label: Label,
 }
 
+/// How many agent labels one connection may map before the oldest generation is
+/// dropped. Two generations are live at once, so the true ceiling is twice this.
+pub const DEFAULT_LABEL_CAPACITY: usize = 65_536;
+
+/// Bounded agent-label -> core-label map.
+///
+/// # Why this has to be bounded
+///
+/// The depth cap stops the DAG growing under `acc = acc + item`, but the agent
+/// keeps minting a fresh label every iteration and each one needs an entry
+/// here. Measured after the cap landed: 64 DAG nodes, 50,002 map entries. The
+/// leak moved, it did not close.
+///
+/// # Why dropping the oldest generation is safe enough
+///
+/// Label reference locality is extreme. A label is named by the operations
+/// immediately following its creation and then never again — an accumulator
+/// only ever names the previous one. So the recent generation holds everything
+/// actually reachable, and the one before it is nearly all dead weight.
+///
+/// Two generations rather than a true LRU because it needs no ordering data and
+/// no crate: when `hot` fills, `cold` is discarded, `hot` becomes `cold`, and a
+/// fresh `hot` starts. A hit in `cold` is promoted, so anything still in use
+/// survives indefinitely.
+///
+/// # The part that is not safe, and is therefore counted
+///
+/// A label evicted while still live translates to [`UNTAINTED`], which reports
+/// a dirty value as clean. That is a false negative, and unlike a truncated
+/// chain it cannot be distinguished after the fact — so every miss is counted
+/// and surfaced rather than quietly absorbed.
+#[derive(Default)]
+struct Remap {
+    hot: HashMap<Label, Label>,
+    cold: HashMap<Label, Label>,
+    capacity: usize,
+    misses: u64,
+}
+
+impl Remap {
+    fn new(capacity: usize) -> Self {
+        Self {
+            hot: HashMap::new(),
+            cold: HashMap::new(),
+            capacity: capacity.max(1),
+            misses: 0,
+        }
+    }
+
+    fn insert(&mut self, from: Label, to: Label) {
+        if self.hot.len() >= self.capacity {
+            self.cold = std::mem::take(&mut self.hot);
+        }
+        self.hot.insert(from, to);
+    }
+
+    fn get(&mut self, label: Label) -> Option<Label> {
+        if let Some(&core) = self.hot.get(&label) {
+            return Some(core);
+        }
+        // Still in use, so pull it back into the live generation rather than
+        // letting the next rotation take it.
+        if let Some(&core) = self.cold.get(&label) {
+            self.hot.insert(label, core);
+            return Some(core);
+        }
+        None
+    }
+
+    fn len(&self) -> usize {
+        self.hot.len() + self.cold.len()
+    }
+
+    fn clear(&mut self) {
+        self.hot.clear();
+        self.cold.clear();
+    }
+}
+
 /// Per-connection state. Its own label space, its own translation table.
 pub struct Agent {
     pub hello: Hello,
-    remap: HashMap<Label, Label>,
+    remap: Remap,
 }
 
 impl Agent {
     pub fn new(hello: Hello) -> Self {
+        Self::with_capacity(hello, DEFAULT_LABEL_CAPACITY)
+    }
+
+    pub fn with_capacity(hello: Hello, capacity: usize) -> Self {
         Self {
             hello,
-            remap: HashMap::new(),
+            remap: Remap::new(capacity),
         }
     }
 
-    /// How many distinct agent labels have been seen. Bounded by the agent's own
-    /// interning, so this is a memory ceiling worth asserting on.
+    /// How many agent labels are currently mapped. Bounded by capacity, so this
+    /// is the memory ceiling the Phase 3 gate watches.
     pub fn mapped_labels(&self) -> usize {
         self.remap.len()
     }
 
-    fn translate(&self, label: Label) -> Label {
+    /// Label lookups that found nothing. Each one was reported untainted, so a
+    /// non-zero count means the graph may be missing flows it should have had.
+    pub fn misses(&self) -> u64 {
+        self.remap.misses
+    }
+
+    fn translate(&mut self, label: Label) -> Label {
         if label == UNTAINTED {
             return UNTAINTED;
         }
-        // An unknown label means its defining event was dropped by the agent's
-        // ring buffer. Untainted is the honest answer: inventing a node would
-        // fabricate provenance that never existed.
-        self.remap.get(&label).copied().unwrap_or(UNTAINTED)
+        match self.remap.get(label) {
+            Some(core) => core,
+            None => {
+                // Either the defining event was dropped by the agent's ring
+                // buffer, or the label aged out here. Untainted is the only
+                // answer available: inventing a node would fabricate provenance
+                // that never existed.
+                self.remap.misses += 1;
+                UNTAINTED
+            }
+        }
     }
 }
 
@@ -189,6 +285,8 @@ impl Core {
         crate::aggregate::Totals {
             dropped: self.dropped,
             truncated: self.dag.truncated(),
+            // Misses live on the agents, so whoever owns those adds them in.
+            lost: 0,
         }
     }
 

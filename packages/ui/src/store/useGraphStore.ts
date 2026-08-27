@@ -18,6 +18,8 @@ interface GraphState {
   unresolved: number;
   /** Derivation chains cut short by the DAG's depth cap. */
   truncated: number;
+  /** Labels that read as untainted because they were lost. Flows we may be missing. */
+  lost: number;
   connected: boolean;
   selectedEdge: string | null;
   version: number;
@@ -35,6 +37,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   dropped: 0,
   unresolved: 0,
   truncated: 0,
+  lost: 0,
   connected: false,
   selectedEdge: null,
   version: 0,
@@ -55,6 +58,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
       dropped: delta.droppedTotal,
       unresolved: delta.unresolved,
       truncated: delta.truncated,
+      lost: delta.lost,
     }));
   },
 }));

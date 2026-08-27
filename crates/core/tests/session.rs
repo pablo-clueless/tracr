@@ -61,10 +61,12 @@ fn skeleton() -> Skeleton {
     )
 }
 
-fn session() -> Session {
+/// A session with one agent connection and one viewer already attached.
+fn session() -> (Session, u32) {
     let mut session = Session::new(skeleton());
     session.connect(AGENT);
-    session
+    let sub = session.subscribe();
+    (session, sub)
 }
 
 fn parse(json: &str) -> Value {
@@ -73,11 +75,11 @@ fn parse(json: &str) -> Value {
 
 #[test]
 fn folds_a_js_agent_stream_into_a_ui_frame() {
-    let mut session = session();
+    let (mut session, sub) = session();
 
     // stream.bin is a hello and a batch, each length-prefixed.
     session.feed(AGENT, &fixture("stream.bin"));
-    let frame = parse(&session.tick().expect("something moved"));
+    let frame = parse(&session.tick(sub).expect("something moved"));
 
     assert_eq!(frame["edges"][0]["edgeId"], 1);
     assert_eq!(frame["edges"][0]["count"], 1);
@@ -89,13 +91,13 @@ fn folds_a_js_agent_stream_into_a_ui_frame() {
 #[test]
 fn reassembles_a_stream_delivered_one_byte_at_a_time() {
     // A socket read boundary has nothing to do with a frame boundary.
-    let mut session = session();
+    let (mut session, sub) = session();
 
     for byte in fixture("stream.bin") {
         session.feed(AGENT, &[byte]);
     }
 
-    let frame = parse(&session.tick().expect("something moved"));
+    let frame = parse(&session.tick(sub).expect("something moved"));
     assert_eq!(frame["edges"][0]["edgeId"], 1);
     assert_eq!(session.stats().accepted, 2);
 }
@@ -104,7 +106,7 @@ fn reassembles_a_stream_delivered_one_byte_at_a_time() {
 fn refuses_to_fold_events_that_arrive_before_a_hello() {
     // Without a hello there is no label space, so the labels cannot be
     // translated and folding them would merge unrelated provenance.
-    let mut session = session();
+    let (mut session, _sub) = session();
 
     session.feed_frame(AGENT, &fixture("batch.bin"));
 
@@ -115,7 +117,7 @@ fn refuses_to_fold_events_that_arrive_before_a_hello() {
 
 #[test]
 fn accepts_the_same_batch_once_the_hello_lands() {
-    let mut session = session();
+    let (mut session, _sub) = session();
 
     session.feed_frame(AGENT, &fixture("hello.bin"));
     session.feed_frame(AGENT, &fixture("batch.bin"));
@@ -127,24 +129,24 @@ fn accepts_the_same_batch_once_the_hello_lands() {
 
 #[test]
 fn stays_quiet_on_a_tick_where_nothing_moved() {
-    let mut session = session();
+    let (mut session, sub) = session();
     session.feed(AGENT, &fixture("stream.bin"));
 
-    assert!(session.tick().is_some());
+    assert!(session.tick(sub).is_some());
     // An idle app must not cost the UI a parse and a layout pass.
-    assert!(session.tick().is_none());
+    assert!(session.tick(sub).is_none());
 }
 
 #[test]
 fn speaks_up_when_only_a_counter_moved() {
     // No edge changed, but the agent admitted losing 9001 events. Silence here
     // would leave the UI showing a graph it has no reason to distrust.
-    let mut session = session();
+    let (mut session, sub) = session();
     session.feed(AGENT, &fixture("stream.bin"));
-    session.tick();
+    session.tick(sub);
 
     session.feed_frame(AGENT, &fixture("dropped-only.bin"));
-    let frame = parse(&session.tick().expect("the dropped total moved"));
+    let frame = parse(&session.tick(sub).expect("the dropped total moved"));
 
     assert!(frame["edges"].as_array().unwrap().is_empty());
     assert_eq!(frame["droppedTotal"], 4_294_967_295u64 + 9001);
@@ -152,7 +154,7 @@ fn speaks_up_when_only_a_counter_moved() {
 
 #[test]
 fn counts_a_malformed_frame_and_keeps_going() {
-    let mut session = session();
+    let (mut session, _sub) = session();
     session.feed_frame(AGENT, &fixture("hello.bin"));
 
     session.feed_frame(AGENT, &[0xc1]); // never a valid msgpack byte
@@ -166,7 +168,7 @@ fn counts_a_malformed_frame_and_keeps_going() {
 #[test]
 fn counts_an_unknown_frame_tag_apart_from_a_broken_one() {
     // A newer agent against an older core is expected, not an error.
-    let mut session = session();
+    let (mut session, _sub) = session();
     session.feed_frame(AGENT, &fixture("hello.bin"));
 
     session.feed_frame(AGENT, &[0x91, 0x63]); // one-element array, tag 99
@@ -187,13 +189,13 @@ fn ignores_bytes_for_a_connection_that_was_never_opened() {
 
 #[test]
 fn counts_two_agents_reporting_the_same_crossing() {
-    let mut session = session();
+    let (mut session, sub) = session();
     session.connect(2);
 
     session.feed(AGENT, &fixture("stream.bin"));
     session.feed(2, &fixture("stream.bin"));
 
-    let frame = parse(&session.tick().expect("something moved"));
+    let frame = parse(&session.tick(sub).expect("something moved"));
     assert_eq!(frame["edges"][0]["count"], 2);
 }
 
@@ -201,7 +203,7 @@ fn counts_two_agents_reporting_the_same_crossing() {
 fn keeps_provenance_after_the_connection_that_reported_it_drops() {
     // A run-wide graph outlives the process that fed it; otherwise closing a
     // browser tab would erase what it showed.
-    let mut session = session();
+    let (mut session, _sub) = session();
     session.feed(AGENT, &fixture("stream.bin"));
     let before = session.core().footprint().dag_nodes;
 
@@ -213,16 +215,16 @@ fn keeps_provenance_after_the_connection_that_reported_it_drops() {
 
 #[test]
 fn resends_in_full_after_a_client_takes_the_skeleton() {
-    let mut session = session();
+    let (mut session, sub) = session();
     session.feed(AGENT, &fixture("stream.bin"));
-    session.tick();
-    assert!(session.tick().is_none());
+    session.tick(sub);
+    assert!(session.tick(sub).is_none());
 
     // A fresh client has seen no counts, so "only what moved" means nothing.
-    let skeleton = parse(&session.skeleton_frame());
+    let skeleton = parse(&session.skeleton_frame(sub));
     assert_eq!(skeleton["nodes"].as_array().unwrap().len(), 5);
 
-    let frame = parse(&session.tick().expect("resends everything"));
+    let frame = parse(&session.tick(sub).expect("resends everything"));
     assert_eq!(frame["edges"][0]["edgeId"], 1);
 }
 
@@ -230,12 +232,12 @@ fn resends_in_full_after_a_client_takes_the_skeleton() {
 fn changing_granularity_voids_what_the_ui_was_told() {
     // Edge ids at one level mean nothing at another, so the tracker's memory is
     // not just stale, it is about a different graph.
-    let mut session = session();
+    let (mut session, sub) = session();
     session.feed(AGENT, &fixture("stream.bin"));
-    session.tick();
+    session.tick(sub);
 
-    session.set_level(node_kind::CALL_SITE);
-    let frame = parse(&session.tick().expect("resends at the new level"));
+    session.set_level(sub, node_kind::CALL_SITE);
+    let frame = parse(&session.tick(sub).expect("resends at the new level"));
 
     // Same flow, call-site edge this time.
     assert_eq!(frame["edges"][0]["edgeId"], 2);
@@ -243,13 +245,13 @@ fn changing_granularity_voids_what_the_ui_was_told() {
 
 #[test]
 fn setting_the_same_level_twice_changes_nothing() {
-    let mut session = session();
+    let (mut session, sub) = session();
     session.feed(AGENT, &fixture("stream.bin"));
-    session.tick();
+    session.tick(sub);
 
-    session.set_level(node_kind::FILE);
+    session.set_level(sub, node_kind::FILE);
 
-    assert!(session.tick().is_none());
+    assert!(session.tick(sub).is_none());
 }
 
 #[test]
@@ -259,17 +261,103 @@ fn applies_the_element_ceiling_before_sending() {
 
     session.feed(AGENT, &fixture("stream.bin"));
 
-    assert!(session.rollup().edges.is_empty());
-    assert_eq!(session.rollup().elements(), 0);
+    assert!(session.rollup(node_kind::FILE).edges.is_empty());
+    assert_eq!(session.rollup(node_kind::FILE).elements(), 0);
 }
 
 #[test]
 fn a_new_skeleton_voids_the_old_counts() {
-    let mut session = session();
+    let (mut session, sub) = session();
     session.feed(AGENT, &fixture("stream.bin"));
-    session.tick();
+    session.tick(sub);
 
     session.set_skeleton(skeleton());
 
-    assert!(session.tick().is_some());
+    assert!(session.tick(sub).is_some());
+}
+
+#[test]
+fn gives_every_viewer_the_full_picture() {
+    // With one shared tracker the first viewer to tick consumed the change and
+    // the second saw nothing, so two open tabs each showed half a graph.
+    let (mut session, first) = session();
+    let second = session.subscribe();
+    session.feed(AGENT, &fixture("stream.bin"));
+
+    let a = parse(&session.tick(first).expect("first viewer sees it"));
+    let b = parse(&session.tick(second).expect("second viewer sees it too"));
+
+    assert_eq!(a["edges"][0]["edgeId"], 1);
+    assert_eq!(b["edges"][0]["edgeId"], 1);
+    assert_eq!(a["edges"][0]["count"], b["edges"][0]["count"]);
+}
+
+#[test]
+fn lets_two_viewers_hold_different_granularities() {
+    let (mut session, file_view) = session();
+    let call_view = session.subscribe();
+    session.set_level(call_view, node_kind::CALL_SITE);
+    session.feed(AGENT, &fixture("stream.bin"));
+
+    let coarse = parse(&session.tick(file_view).expect("file view"));
+    let fine = parse(&session.tick(call_view).expect("call view"));
+
+    assert_eq!(coarse["edges"][0]["edgeId"], 1);
+    assert_eq!(fine["edges"][0]["edgeId"], 2);
+    assert_eq!(session.level(file_view), Some(node_kind::FILE));
+    assert_eq!(session.level(call_view), Some(node_kind::CALL_SITE));
+}
+
+#[test]
+fn one_viewer_leaving_does_not_disturb_another() {
+    let (mut session, staying) = session();
+    let leaving = session.subscribe();
+    session.feed(AGENT, &fixture("stream.bin"));
+    session.tick(staying);
+
+    session.unsubscribe(leaving);
+
+    assert_eq!(session.subscriber_count(), 1);
+    assert!(session.tick(staying).is_none());
+}
+
+#[test]
+fn a_tick_for_a_viewer_that_never_subscribed_is_silent() {
+    let (mut session, _sub) = session();
+    session.feed(AGENT, &fixture("stream.bin"));
+
+    assert!(session.tick(9999).is_none());
+}
+
+#[test]
+fn reports_labels_it_could_not_translate() {
+    // Misses live on the agents, so the session has to gather them; a graph
+    // missing flows must not look identical to one that saw everything.
+    let (mut session, sub) = session();
+    session.feed_frame(AGENT, &fixture("hello.bin"));
+    // A batch whose combines name labels no origin ever defined.
+    session.feed_frame(AGENT, &fixture("batch.bin"));
+    session.tick(sub);
+
+    // batch.bin flows and sinks label 3, which its own combines define, so a
+    // clean run reports nothing lost.
+    assert_eq!(session.totals().lost, 0);
+
+    let frame = parse(&session.skeleton_frame(sub));
+    assert_eq!(frame["tag"], 0);
+}
+
+#[test]
+fn a_disconnected_agent_takes_its_miss_count_with_it() {
+    // Deliberate: keeping a tally per connection for the life of a long run is
+    // the unbounded growth this layer exists to avoid. Undercounting is the
+    // accepted cost, and it is written down rather than discovered later.
+    let (mut session, _sub) = session();
+    session.feed(AGENT, &fixture("stream.bin"));
+    let before = session.totals();
+
+    session.disconnect(AGENT);
+
+    assert_eq!(session.totals().lost, 0);
+    assert_eq!(session.totals().dropped, before.dropped);
 }

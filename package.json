@@ -30,7 +30,8 @@
     "gate": "pnpm --filter @pablo_clueless/babel-plugin gate",
     "bench": "node scripts/bench-express.mjs && node scripts/bench-hmr.mjs",
     "bench:express": "node scripts/bench-express.mjs",
-    "bench:hmr": "node scripts/bench-hmr.mjs"
+    "bench:hmr": "node scripts/bench-hmr.mjs",
+    "core:sites": "node scripts/gen-site-fixture.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
