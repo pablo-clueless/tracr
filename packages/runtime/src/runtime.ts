@@ -78,7 +78,27 @@ export class TracrRuntime {
   sink(sinkId: number, site: SiteId, label: Label): void {
     if (label === UNTAINTED) return;
     this.buffer.push([EventTag.Sink, site, label, sinkId]);
+    this.lastSink = { sinkId, site, label };
     this.onSink?.({ sinkId, site, label });
+  }
+
+  /**
+   * The most recent sink hit, for a wrapper that needs the label of the value
+   * about to cross a boundary.
+   *
+   * A side channel for the same reason `argTaint` is one: the alternative is
+   * changing what an instrumented call passes, and nothing may alter the shape
+   * of a call the application made. The transform emits the sink immediately
+   * before the call runs, so a wrapper reads this in the same tick and clears
+   * it — a stale value here would tag the wrong request.
+   */
+  lastSink: { sinkId: number; site: SiteId; label: Label } | null = null;
+
+  /** Reads and clears, so one sink hit can only ever tag one call. */
+  takeLastSink(sinkId: number): Label {
+    const pending = this.lastSink;
+    this.lastSink = null;
+    return pending !== null && pending.sinkId === sinkId ? pending.label : UNTAINTED;
   }
 
   /**
