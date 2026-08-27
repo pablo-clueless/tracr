@@ -1,8 +1,7 @@
-import { readFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-
 import { describe, expect, it } from "vitest";
+import { dirname, resolve } from "node:path";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 
 /**
  * The main entry ships into the browser. A bundler that meets `node:net` there

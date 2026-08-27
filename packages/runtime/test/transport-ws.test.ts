@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { decode } from "@msgpack/msgpack";
 
 import { EventTag, FrameType, PROTOCOL_VERSION } from "@pablo_clueless/protocol";
-
 import { wsTransport, type WebSocketLike } from "../src/transport-ws.js";
 
 const hello = {

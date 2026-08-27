@@ -1,9 +1,9 @@
+import { afterAll, describe, expect, it } from "vitest";
 import { createServer, type Server } from "node:net";
+import { decode } from "@msgpack/msgpack";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
-import { decode } from "@msgpack/msgpack";
 
 import { EventTag, FrameType, PROTOCOL_VERSION } from "@pablo_clueless/protocol";
 import { nodeTransport } from "../src/transport-node.js";

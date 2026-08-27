@@ -41,14 +41,23 @@ fn main() {
 
     let session = serve::shared(Session::new(skeleton));
 
+    // Bound before it is announced. Printing first would claim the port even
+    // when the bind failed, and anything waiting on that line — a supervisor, a
+    // test — would go on to connect to nothing.
+    let listener = match serve::bind(addr.as_str()) {
+        Ok(listener) => listener,
+        Err(error) => {
+            eprintln!("tracr-core: could not listen on {addr}: {error}");
+            std::process::exit(1);
+        }
+    };
+
     eprintln!("tracr-core: listening on ws://{addr}");
     eprintln!("tracr-core:   agents -> ws://{addr}{AGENT_PATH}");
     eprintln!("tracr-core:   ui     -> ws://{addr}/");
 
-    if let Err(error) = serve::serve(session, addr.as_str()) {
-        eprintln!("tracr-core: could not listen on {addr}: {error}");
-        std::process::exit(1);
-    }
+    let tick = std::time::Duration::from_millis(1000 / serve::DEFAULT_TICK_HZ);
+    serve::serve_listener(session, listener, tick);
 }
 
 fn load(path: &str) -> Result<Skeleton, Box<dyn std::error::Error>> {

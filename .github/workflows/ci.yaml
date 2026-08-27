@@ -91,3 +91,22 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
+
+  integration:
+    name: Agent against daemon
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      # The only suite that runs a real JS agent against a real tracr-core
+      # process, so it needs both toolchains and the built binary.
+      - run: cargo build
+      - run: pnpm test:integration

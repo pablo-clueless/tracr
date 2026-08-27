@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
 import { decode, decodeMulti } from "@msgpack/msgpack";
+import { describe, expect, it } from "vitest";
 
-import { EventTag, FrameType } from "@pablo_clueless/protocol";
 import { encodeMsgPack, frameStream, MsgPackWriter } from "../src/msgpack.js";
+import { EventTag, FrameType } from "@pablo_clueless/protocol";
 import { encodeBatch, encodeHello } from "../src/encode.js";
 
 const hex = (bytes: Uint8Array): string =>
