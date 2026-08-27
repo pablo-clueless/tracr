@@ -192,6 +192,10 @@ pub struct EdgeDelta {
 pub struct Totals {
     pub dropped: u64,
     pub truncated: u64,
+    /// Label lookups that found nothing, so the value was reported untainted.
+    /// A false negative: unlike a truncated chain it leaves no trace in the
+    /// graph, which is exactly why it is counted.
+    pub lost: u64,
 }
 
 /// Everything that moved since the last frame.
@@ -209,6 +213,8 @@ pub struct Delta {
     /// Derivation chains that hit the depth cap. A provenance panel has to say
     /// "the chain stops here" rather than implying it reached a source.
     pub truncated: u64,
+    /// Labels that aged out or were never seen, and so read as untainted.
+    pub lost: u64,
 }
 
 impl Delta {
@@ -255,6 +261,7 @@ impl DeltaTracker {
             dropped_total: totals.dropped,
             unresolved: rollup.unresolved,
             truncated: totals.truncated,
+            lost: totals.lost,
             ..Delta::default()
         };
 

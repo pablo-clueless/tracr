@@ -343,3 +343,121 @@ fn a_saturated_value_stays_tainted_at_the_sink() {
     assert_eq!(hit.label, tracr_core::TRUNCATED);
     assert_ne!(hit.label, UNTAINTED);
 }
+
+#[test]
+fn an_accumulating_loop_stops_growing_the_label_map() {
+    // The depth cap bounded the DAG but moved the leak here: measured at 64 DAG
+    // nodes and 50,002 map entries. This is the regression test for the second
+    // half.
+    let mut core = Core::new();
+    let mut a = Agent::with_capacity(hello(1), 64);
+
+    core.apply(&mut a, origin(1, 10, 0));
+    let mut acc = 2;
+    core.apply(
+        &mut a,
+        Event::Combine {
+            site: 11,
+            label: acc,
+            op: 0,
+            parents: vec![1],
+        },
+    );
+
+    for _ in 0..50_000 {
+        let next = acc + 1;
+        core.apply(
+            &mut a,
+            Event::Combine {
+                site: 11,
+                label: next,
+                op: 0,
+                parents: vec![acc, 1],
+            },
+        );
+        acc = next;
+    }
+
+    // Two generations live at once, so the ceiling is twice the capacity.
+    assert!(
+        a.mapped_labels() <= 128,
+        "label map kept growing: {}",
+        a.mapped_labels()
+    );
+    assert!(core.footprint().dag_nodes < 100);
+}
+
+#[test]
+fn a_label_still_in_use_survives_eviction() {
+    // Reference locality is the whole argument for dropping the oldest
+    // generation, so the case that would break it — an old label named long
+    // after it was created — has to keep working.
+    let mut core = Core::new();
+    let mut a = Agent::with_capacity(hello(1), 4);
+
+    core.apply(&mut a, origin(1, 10, 0));
+
+    // Churn well past capacity, naming label 1 each time so it stays live.
+    for i in 0..200 {
+        core.apply(
+            &mut a,
+            Event::Combine {
+                site: 11,
+                label: 100 + i,
+                op: 0,
+                parents: vec![1],
+            },
+        );
+    }
+
+    core.apply(
+        &mut a,
+        Event::Sink {
+            site: 12,
+            label: 1,
+            sink_id: 0,
+        },
+    );
+
+    assert_ne!(core.sinks()[0].label, UNTAINTED);
+    assert_eq!(a.misses(), 0);
+}
+
+#[test]
+fn counts_a_label_it_could_not_translate() {
+    // An evicted-but-live label reads as untainted, which is a false negative.
+    // It cannot be detected after the fact, so it is counted instead.
+    let mut core = Core::new();
+    let mut a = agent(1);
+
+    core.apply(
+        &mut a,
+        Event::Sink {
+            site: 12,
+            label: 999,
+            sink_id: 0,
+        },
+    );
+
+    assert_eq!(a.misses(), 1);
+    assert_eq!(core.sinks()[0].label, UNTAINTED);
+}
+
+#[test]
+fn an_untainted_operand_is_not_a_miss() {
+    // Label 0 is the common case on every instrumented line. Counting it would
+    // bury the real misses in noise.
+    let mut core = Core::new();
+    let mut a = agent(1);
+
+    core.apply(
+        &mut a,
+        Event::Sink {
+            site: 12,
+            label: UNTAINTED,
+            sink_id: 0,
+        },
+    );
+
+    assert_eq!(a.misses(), 0);
+}

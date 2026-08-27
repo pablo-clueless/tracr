@@ -88,6 +88,12 @@ export interface CoreDelta {
    * "the chain stops here" rather than implying it reached a source.
    */
   truncated: number;
+  /**
+   * Labels that aged out of an agent's translation table, or whose defining
+   * event was dropped. Each was reported untainted, so this is the count of
+   * flows the graph may be missing — a false negative, not a partial answer.
+   */
+  lost: number;
 }
 
 export interface CoreSkeleton extends Skeleton {

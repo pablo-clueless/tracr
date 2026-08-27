@@ -281,6 +281,23 @@ impl Session {
         }
     }
 
+    /// Run-wide counters, including the label misses that live on the agents
+    /// rather than on the core.
+    ///
+    /// A disconnected agent takes its miss count with it. That undercounts, but
+    /// carrying a tally for every connection a long run ever had is exactly the
+    /// unbounded growth this layer exists to avoid.
+    pub fn totals(&self) -> Totals {
+        let mut totals = self.core.totals();
+        totals.lost = self
+            .connections
+            .values()
+            .filter_map(|connection| connection.agent.as_ref())
+            .map(Agent::misses)
+            .sum();
+        totals
+    }
+
     /// The current rollup at `level`, capped, without touching delta state.
     pub fn rollup(&self, level: u8) -> Rollup {
         let mut rollup = roll_up(
@@ -301,7 +318,7 @@ impl Session {
     pub fn tick(&mut self, id: SubId) -> Option<String> {
         let level = self.subscribers.get(&id)?.level;
         let rollup = self.rollup(level);
-        let totals = self.core.totals();
+        let totals = self.totals();
 
         let sub = self.subscribers.get_mut(&id)?;
         let delta = sub.tracker.diff(&rollup, totals);

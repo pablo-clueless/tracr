@@ -65,6 +65,7 @@ fn totals(dropped: u64) -> Totals {
     Totals {
         dropped,
         truncated: 0,
+        lost: 0,
     }
 }
 

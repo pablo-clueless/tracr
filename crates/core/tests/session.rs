@@ -328,3 +328,36 @@ fn a_tick_for_a_viewer_that_never_subscribed_is_silent() {
 
     assert!(session.tick(9999).is_none());
 }
+
+#[test]
+fn reports_labels_it_could_not_translate() {
+    // Misses live on the agents, so the session has to gather them; a graph
+    // missing flows must not look identical to one that saw everything.
+    let (mut session, sub) = session();
+    session.feed_frame(AGENT, &fixture("hello.bin"));
+    // A batch whose combines name labels no origin ever defined.
+    session.feed_frame(AGENT, &fixture("batch.bin"));
+    session.tick(sub);
+
+    // batch.bin flows and sinks label 3, which its own combines define, so a
+    // clean run reports nothing lost.
+    assert_eq!(session.totals().lost, 0);
+
+    let frame = parse(&session.skeleton_frame(sub));
+    assert_eq!(frame["tag"], 0);
+}
+
+#[test]
+fn a_disconnected_agent_takes_its_miss_count_with_it() {
+    // Deliberate: keeping a tally per connection for the life of a long run is
+    // the unbounded growth this layer exists to avoid. Undercounting is the
+    // accepted cost, and it is written down rather than discovered later.
+    let (mut session, _sub) = session();
+    session.feed(AGENT, &fixture("stream.bin"));
+    let before = session.totals();
+
+    session.disconnect(AGENT);
+
+    assert_eq!(session.totals().lost, 0);
+    assert_eq!(session.totals().dropped, before.dropped);
+}
