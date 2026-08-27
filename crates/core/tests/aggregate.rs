@@ -4,7 +4,7 @@
 //! handed, it never discards one. An edge count that quietly disagrees with the
 //! events behind it is worse than no graph at all.
 
-use tracr_core::aggregate::{roll_up, DeltaTracker, EdgeCount, Rollup, UnmappedFlow};
+use tracr_core::aggregate::{roll_up, DeltaTracker, EdgeCount, Rollup, Totals, UnmappedFlow};
 use tracr_core::ingest::SinkHit;
 use tracr_core::skeleton::{node_kind, EdgeId, NodeId, Skeleton, SkeletonEdge, SkeletonNode};
 
@@ -59,6 +59,13 @@ fn skeleton() -> Skeleton {
             edge(4, 1, 2),
         ],
     )
+}
+
+fn totals(dropped: u64) -> Totals {
+    Totals {
+        dropped,
+        truncated: 0,
+    }
 }
 
 fn sink(site: u32, sink_id: u32, count: u64) -> SinkHit {
@@ -247,16 +254,16 @@ fn emits_only_the_edges_whose_counts_moved() {
     let mut tracker = DeltaTracker::new();
 
     let first = roll_up(&skeleton, &[((1001, 2000), 5)], &[], node_kind::FILE);
-    let delta = tracker.diff(&first, 0);
+    let delta = tracker.diff(&first, totals(0));
     assert_eq!(delta.edges.len(), 1);
     assert_eq!(delta.edges[0].count, 5);
     assert!(delta.edges[0].tainted);
 
     // Same counts again: the UI already has this, so say nothing.
-    assert!(tracker.diff(&first, 0).is_empty());
+    assert!(tracker.diff(&first, totals(0)).is_empty());
 
     let second = roll_up(&skeleton, &[((1001, 2000), 8)], &[], node_kind::FILE);
-    let delta = tracker.diff(&second, 0);
+    let delta = tracker.diff(&second, totals(0));
     assert_eq!(delta.edges.len(), 1);
     assert_eq!(delta.edges[0].count, 8);
 }
@@ -270,7 +277,7 @@ fn carries_undeclared_crossings_and_internals_through_the_delta() {
 
     let delta = tracker.diff(
         &roll_up(&skeleton, &flows, &[sink(2000, 1, 4)], node_kind::CALL_SITE),
-        0,
+        totals(0),
     );
 
     assert_eq!(
@@ -288,7 +295,7 @@ fn carries_undeclared_crossings_and_internals_through_the_delta() {
     // Nothing moved on the second pass, so nothing is worth a UI wakeup.
     let repeat = tracker.diff(
         &roll_up(&skeleton, &flows, &[sink(2000, 1, 4)], node_kind::CALL_SITE),
-        0,
+        totals(0),
     );
     assert!(repeat.is_empty());
 }
@@ -306,13 +313,13 @@ fn stays_quiet_about_an_edge_that_got_capped_out_of_a_frame() {
         ],
         ..Rollup::default()
     };
-    assert_eq!(tracker.diff(&full, 0).edges.len(), 2);
+    assert_eq!(tracker.diff(&full, totals(0)).edges.len(), 2);
 
     let capped = Rollup {
         edges: vec![EdgeCount { edge: 2, count: 90 }],
         ..Rollup::default()
     };
-    assert!(tracker.diff(&capped, 0).edges.is_empty());
+    assert!(tracker.diff(&capped, totals(0)).edges.is_empty());
 }
 
 #[test]
@@ -322,11 +329,11 @@ fn reports_running_totals_rather_than_increments() {
     let mut tracker = DeltaTracker::new();
     let rollup = roll_up(&skeleton, &[((9999, 2000), 6)], &[], node_kind::FILE);
 
-    let delta = tracker.diff(&rollup, 12);
+    let delta = tracker.diff(&rollup, totals(12));
 
     assert_eq!(delta.dropped_total, 12);
     assert_eq!(delta.unresolved, 6);
-    assert_eq!(tracker.dropped(), 12);
+    assert_eq!(tracker.totals().dropped, 12);
 }
 
 #[test]
@@ -335,10 +342,10 @@ fn resends_everything_after_a_client_reconnects() {
     let mut tracker = DeltaTracker::new();
     let rollup = roll_up(&skeleton, &[((1001, 2000), 5)], &[], node_kind::FILE);
 
-    tracker.diff(&rollup, 0);
-    assert!(tracker.diff(&rollup, 0).is_empty());
+    tracker.diff(&rollup, totals(0));
+    assert!(tracker.diff(&rollup, totals(0)).is_empty());
 
     tracker.reset();
 
-    assert_eq!(tracker.diff(&rollup, 0).edges.len(), 1);
+    assert_eq!(tracker.diff(&rollup, totals(0)).edges.len(), 1);
 }

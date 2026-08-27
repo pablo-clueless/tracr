@@ -16,6 +16,8 @@ interface GraphState {
   dropped: number;
   /** Flows naming a site the skeleton lacks — the static parse and the run disagree. */
   unresolved: number;
+  /** Derivation chains cut short by the DAG's depth cap. */
+  truncated: number;
   connected: boolean;
   selectedEdge: string | null;
   version: number;
@@ -32,6 +34,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   level: "file",
   dropped: 0,
   unresolved: 0,
+  truncated: 0,
   connected: false,
   selectedEdge: null,
   version: 0,
@@ -51,6 +54,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
       version: state.version + 1,
       dropped: delta.droppedTotal,
       unresolved: delta.unresolved,
+      truncated: delta.truncated,
     }));
   },
 }));

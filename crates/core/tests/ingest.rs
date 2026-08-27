@@ -252,3 +252,94 @@ fn a_repeating_workload_reaches_a_fixed_ceiling() {
     assert_eq!(core.sinks()[0].count, 100_100);
     assert_eq!(core.flows()[0].1, 100_100);
 }
+
+#[test]
+fn an_accumulating_loop_stops_growing_the_dag() {
+    // Measured before the depth cap: 50k iterations of `acc = acc + item` grew
+    // the DAG to 50,002 nodes, one per iteration, forever.
+    let mut core = Core::new();
+    let mut a = agent(1);
+
+    core.apply(&mut a, origin(1, 10, 0));
+    let mut acc = 2;
+    core.apply(
+        &mut a,
+        Event::Combine {
+            site: 11,
+            label: acc,
+            op: 0,
+            parents: vec![1],
+        },
+    );
+
+    for _ in 0..50_000 {
+        let next = acc + 1;
+        core.apply(
+            &mut a,
+            Event::Combine {
+                site: 11,
+                label: next,
+                op: 0,
+                parents: vec![acc, 1],
+            },
+        );
+        acc = next;
+    }
+
+    let footprint = core.footprint();
+    assert!(
+        footprint.dag_nodes < 100,
+        "dag kept growing: {} nodes",
+        footprint.dag_nodes
+    );
+    assert!(footprint.truncated > 49_000);
+}
+
+#[test]
+fn a_saturated_value_stays_tainted_at_the_sink() {
+    // The cap must not launder a value clean. Losing the chain is acceptable;
+    // reporting a dirty value as untainted is not.
+    let mut core = Core::new();
+    let mut a = agent(1);
+    let mut dag = tracr_core::dag::Dag::with_max_depth(2);
+    std::mem::swap(&mut core.dag, &mut dag);
+
+    core.apply(&mut a, origin(1, 10, 0));
+    let mut acc = 2;
+    core.apply(
+        &mut a,
+        Event::Combine {
+            site: 11,
+            label: acc,
+            op: 0,
+            parents: vec![1],
+        },
+    );
+    for _ in 0..10 {
+        let next = acc + 1;
+        core.apply(
+            &mut a,
+            Event::Combine {
+                site: 11,
+                label: next,
+                op: 0,
+                parents: vec![acc, 1],
+            },
+        );
+        acc = next;
+    }
+
+    core.apply(
+        &mut a,
+        Event::Sink {
+            site: 12,
+            label: acc,
+            sink_id: 0,
+        },
+    );
+
+    let hit = &core.sinks()[0];
+    assert_eq!(hit.count, 1);
+    assert_eq!(hit.label, tracr_core::TRUNCATED);
+    assert_ne!(hit.label, UNTAINTED);
+}

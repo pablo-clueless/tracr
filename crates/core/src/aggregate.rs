@@ -184,11 +184,20 @@ pub struct EdgeDelta {
     pub tainted: bool,
 }
 
+/// Run-wide counters the UI displays as-is.
+///
+/// Both are partial-answer tallies: events the agent threw away, and lineages
+/// the DAG refused to extend. Neither is a size, and neither is ever hidden.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Totals {
+    pub dropped: u64,
+    pub truncated: u64,
+}
+
 /// Everything that moved since the last frame.
 ///
-/// `unresolved` and `dropped_total` are running totals rather than diffs: they
-/// are counters the UI displays as-is, and a person watching them wants the
-/// number, not the increment.
+/// The four counters are running totals rather than diffs: they are numbers a
+/// person reads off the screen, and the increment is not what they want.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Delta {
     pub edges: Vec<EdgeDelta>,
@@ -197,6 +206,9 @@ pub struct Delta {
     pub sinks: Vec<NodeSinks>,
     pub dropped_total: u64,
     pub unresolved: u64,
+    /// Derivation chains that hit the depth cap. A provenance panel has to say
+    /// "the chain stops here" rather than implying it reached a source.
+    pub truncated: u64,
 }
 
 impl Delta {
@@ -225,7 +237,7 @@ pub struct DeltaTracker {
     unmapped: HashMap<(NodeId, NodeId), u64>,
     internal: HashMap<NodeId, u64>,
     sinks: HashMap<NodeId, (u32, u64)>,
-    dropped: u64,
+    totals: Totals,
 }
 
 impl DeltaTracker {
@@ -238,10 +250,11 @@ impl DeltaTracker {
     /// An entry missing from `rollup` is not emitted as a zero: counts only ever
     /// climb, so absence means "capped out of this frame", and reporting that as
     /// a reset would make the UI flicker under load.
-    pub fn diff(&mut self, rollup: &Rollup, dropped: u64) -> Delta {
+    pub fn diff(&mut self, rollup: &Rollup, totals: Totals) -> Delta {
         let mut delta = Delta {
-            dropped_total: dropped,
+            dropped_total: totals.dropped,
             unresolved: rollup.unresolved,
+            truncated: totals.truncated,
             ..Delta::default()
         };
 
@@ -275,13 +288,13 @@ impl DeltaTracker {
             }
         }
 
-        self.dropped = dropped;
+        self.totals = totals;
         delta
     }
 
-    /// Total events the agents admitted to discarding, as last reported.
-    pub fn dropped(&self) -> u64 {
-        self.dropped
+    /// The run-wide counters as last reported.
+    pub fn totals(&self) -> Totals {
+        self.totals
     }
 
     /// Forgets what the UI has seen, so the next diff is a full resend. Used

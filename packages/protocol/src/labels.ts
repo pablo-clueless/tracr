@@ -6,7 +6,18 @@ export type Label = number;
 /** Reserved. Every operation must short-circuit on this before doing any work. */
 export const UNTAINTED: Label = 0;
 
+/**
+ * Reserved. Tainted, but the derivation chain was capped before reaching here.
+ *
+ * The opposite answer to {@link UNTAINTED}, not a softer version of it: a
+ * truncated value is dirty with no history, and treating it as clean would let
+ * a sink claim safety it never established.
+ */
+export const TRUNCATED: Label = 0xffffffff;
+
 export const isUntainted = (label: Label): boolean => label === UNTAINTED;
+
+export const isTruncated = (label: Label): boolean => label === TRUNCATED;
 
 export const DagNodeKind = {
   Origin: 0,
