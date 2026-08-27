@@ -72,8 +72,17 @@ export const applySkeleton = (graph: TracrGraph, skeleton: Skeleton): void => {
  */
 const inferredKey = (source: number, target: number): string => `i:${source}>${target}`;
 
-/** Runtime is an overlay: edges light up and carry counts. Never add a node per call. */
-export const applyDelta = (graph: TracrGraph, delta: CoreDelta): void => {
+/**
+ * Runtime is an overlay: edges light up and carry counts. Never add a node per
+ * call.
+ *
+ * Returns whether the *topology* changed — whether an edge appeared that was
+ * not there before. Counts move constantly and must not trigger a relayout;
+ * only a new element can. That distinction is what keeps the graph from
+ * thrashing under load.
+ */
+export const applyDelta = (graph: TracrGraph, delta: CoreDelta): boolean => {
+  let topologyChanged = false;
   for (const edge of delta.edges) {
     const key = String(edge.edgeId);
     if (!graph.hasEdge(key)) continue;
@@ -99,6 +108,7 @@ export const applyDelta = (graph: TracrGraph, delta: CoreDelta): void => {
         tainted: true,
         inferred: true,
       });
+      topologyChanged = true;
     }
     markTainted(graph, source, target);
   }
@@ -117,6 +127,8 @@ export const applyDelta = (graph: TracrGraph, delta: CoreDelta): void => {
     graph.setNodeAttribute(key, "sinkHits", node.count);
     graph.setNodeAttribute(key, "tainted", true);
   }
+
+  return topologyChanged;
 };
 
 const markTainted = (graph: TracrGraph, source: string, target: string): void => {

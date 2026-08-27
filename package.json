@@ -32,7 +32,8 @@
     "bench:express": "node scripts/bench-express.mjs",
     "bench:hmr": "node scripts/bench-hmr.mjs",
     "core:sites": "node scripts/gen-site-fixture.mjs",
-    "test:integration": "vitest run --config vitest.integration.config.ts"
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "soak": "node scripts/soak.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",

@@ -110,3 +110,7 @@ jobs:
       # process, so it needs both toolchains and the built binary.
       - run: cargo build
       - run: pnpm test:integration
+      # A short soak, not the full ten minutes the gate names: enough to catch
+      # a bound regressing, cheap enough to run on every push. The real gate is
+      # `pnpm soak 600`, run deliberately.
+      - run: pnpm soak 60

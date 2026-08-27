@@ -38,11 +38,9 @@ const result = transformSync(APP, {
   babelrc: false,
 });
 
-// Babel resolves `filename` against cwd, so the raw table carries an absolute
-// path from whichever machine ran this. Normalised here to keep the fixture
-// portable and to avoid committing someone's home directory.
+// Written through unchanged. The transform relativises paths itself now, and
+// fixing them up here would hide it the day that regresses.
 const table = result.metadata.tracr.siteTable;
-table.sites = table.sites.map((site) => ({ ...site, file: "src/routes.ts" }));
 const out = join(HERE, "..", "crates", "core", "tests", "fixtures");
 mkdirSync(out, { recursive: true });
 writeFileSync(join(out, "sites.json"), JSON.stringify(table, null, 2));

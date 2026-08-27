@@ -5,7 +5,7 @@
 //! test worth having is one where the transform's actual output crosses into
 //! the core.
 
-use tracr_core::skeleton::{node_kind, SiteInfo, SiteTable, Skeleton};
+use tracr_core::skeleton::{node_kind, CallEdge, SiteInfo, SiteTable, Skeleton};
 
 fn site(site_id: u32, file: &str, line: u32, col: u32, fn_name: Option<&str>) -> SiteInfo {
     SiteInfo {
@@ -15,6 +15,20 @@ fn site(site_id: u32, file: &str, line: u32, col: u32, fn_name: Option<&str>) ->
         col,
         fn_name: fn_name.map(str::to_owned),
     }
+}
+
+/// The single node carrying `label`. Panics rather than silently picking one,
+/// because two matches would mean the fixture changed shape.
+fn named(skeleton: &Skeleton, label: &str) -> u32 {
+    let mut found = skeleton.nodes().iter().filter(|n| n.label == label);
+    let node = found
+        .next()
+        .unwrap_or_else(|| panic!("no node labelled {label}"));
+    assert!(
+        found.next().is_none(),
+        "more than one node labelled {label}"
+    );
+    node.id
 }
 
 fn fixture() -> String {
@@ -157,13 +171,36 @@ fn does_not_depend_on_the_order_sites_arrive_in() {
 }
 
 #[test]
-fn declares_no_edges_it_cannot_justify() {
-    // The table records where code is, never what calls what. Every observed
-    // crossing therefore arrives as `unmapped`, which is accurate: the parse
-    // made no prediction to contradict.
+fn declares_the_calls_the_parse_actually_found() {
+    // `handler` calls `helper`, both defined in src/routes.ts.
     let skeleton = Skeleton::from_site_table_json(&fixture()).expect("parses");
 
-    assert!(skeleton.edges().is_empty());
+    let handler = named(&skeleton, "handler");
+    let helper = named(&skeleton, "helper");
+
+    assert!(skeleton.edge_between(handler, helper).is_some());
+}
+
+#[test]
+fn declares_nothing_for_a_callee_it_cannot_find() {
+    // The fixture also calls `query`, which is a global. An edge to a function
+    // that is not in the graph would be a claim nothing supports.
+    let skeleton = Skeleton::from_site_table_json(&fixture()).expect("parses");
+
+    let names: Vec<&str> = skeleton.nodes().iter().map(|n| n.label.as_str()).collect();
+    assert!(!names.contains(&"query"));
+}
+
+#[test]
+fn treats_top_level_code_as_the_file_calling() {
+    // `const eager = helper("startup")` sits in no function, so the file is
+    // what does the calling.
+    let skeleton = Skeleton::from_site_table_json(&fixture()).expect("parses");
+
+    let file = named(&skeleton, "src/routes.ts");
+    let helper = named(&skeleton, "helper");
+
+    assert!(skeleton.edge_between(file, helper).is_some());
 }
 
 #[test]
@@ -176,4 +213,138 @@ fn an_empty_table_is_an_empty_graph_not_an_error() {
 #[test]
 fn reports_a_table_it_cannot_read_rather_than_guessing() {
     assert!(Skeleton::from_site_table_json("not json").is_err());
+}
+
+#[test]
+fn follows_a_relative_import_to_another_file() {
+    // The module-level graph is empty without this: a call inside one file is
+    // internal there and contributes no edge between modules.
+    let skeleton = Skeleton::from_sites_and_calls(
+        &[
+            site(1, "src/routes.ts", 3, 0, Some("handler")),
+            site(2, "src/lib/helper.ts", 1, 0, Some("clean")),
+        ],
+        &[CallEdge {
+            from: Some("handler".into()),
+            to: "clean".into(),
+            module: Some("./lib/helper.js".into()),
+            file: "src/routes.ts".into(),
+            line: 3,
+            col: 4,
+        }],
+    );
+
+    let handler = named(&skeleton, "handler");
+    let clean = named(&skeleton, "clean");
+    let routes = named(&skeleton, "src/routes.ts");
+    let helper_file = named(&skeleton, "src/lib/helper.ts");
+
+    // Both levels, because the UI renders either.
+    assert!(skeleton.edge_between(handler, clean).is_some());
+    assert!(skeleton.edge_between(routes, helper_file).is_some());
+}
+
+#[test]
+fn matches_a_js_specifier_against_a_ts_file() {
+    // The source writes `./helper.js`; the file on disk is `helper.ts`.
+    // Matching literally would resolve almost nothing in a TypeScript project.
+    let skeleton = Skeleton::from_sites_and_calls(
+        &[
+            site(1, "src/a.ts", 1, 0, Some("caller")),
+            site(2, "src/helper.ts", 1, 0, Some("callee")),
+        ],
+        &[CallEdge {
+            from: Some("caller".into()),
+            to: "callee".into(),
+            module: Some("./helper.js".into()),
+            file: "src/a.ts".into(),
+            line: 1,
+            col: 0,
+        }],
+    );
+
+    assert!(skeleton
+        .edge_between(named(&skeleton, "caller"), named(&skeleton, "callee"))
+        .is_some());
+}
+
+#[test]
+fn walks_up_out_of_a_directory() {
+    let skeleton = Skeleton::from_sites_and_calls(
+        &[
+            site(1, "src/routes/api.ts", 1, 0, Some("caller")),
+            site(2, "src/helper.ts", 1, 0, Some("callee")),
+        ],
+        &[CallEdge {
+            from: Some("caller".into()),
+            to: "callee".into(),
+            module: Some("../helper.js".into()),
+            file: "src/routes/api.ts".into(),
+            line: 1,
+            col: 0,
+        }],
+    );
+
+    assert!(skeleton
+        .edge_between(named(&skeleton, "caller"), named(&skeleton, "callee"))
+        .is_some());
+}
+
+#[test]
+fn ignores_a_call_into_a_package() {
+    // `express` is not part of this graph, and inventing a node for it would
+    // put uninstrumented code on screen as though it were traced.
+    let skeleton = Skeleton::from_sites_and_calls(
+        &[site(1, "src/a.ts", 1, 0, Some("caller"))],
+        &[CallEdge {
+            from: Some("caller".into()),
+            to: "Router".into(),
+            module: Some("express".into()),
+            file: "src/a.ts".into(),
+            line: 1,
+            col: 0,
+        }],
+    );
+
+    assert!(skeleton.edges().is_empty());
+}
+
+#[test]
+fn does_not_draw_a_function_calling_itself() {
+    // Recursion is real, but a self-loop on the graph is noise rather than
+    // information about where data travels.
+    let skeleton = Skeleton::from_sites_and_calls(
+        &[site(1, "src/a.ts", 1, 0, Some("loop"))],
+        &[CallEdge {
+            from: Some("loop".into()),
+            to: "loop".into(),
+            module: None,
+            file: "src/a.ts".into(),
+            line: 2,
+            col: 4,
+        }],
+    );
+
+    assert!(skeleton.edges().is_empty());
+}
+
+#[test]
+fn declares_one_edge_however_often_the_call_appears() {
+    let call = |line: u32| CallEdge {
+        from: Some("caller".into()),
+        to: "callee".into(),
+        module: None,
+        file: "src/a.ts".into(),
+        line,
+        col: 0,
+    };
+    let skeleton = Skeleton::from_sites_and_calls(
+        &[
+            site(1, "src/a.ts", 1, 0, Some("caller")),
+            site(2, "src/a.ts", 9, 0, Some("callee")),
+        ],
+        &[call(3), call(4), call(5)],
+    );
+
+    assert_eq!(skeleton.edges().len(), 1);
 }

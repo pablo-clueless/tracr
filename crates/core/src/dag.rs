@@ -149,6 +149,62 @@ impl Dag {
         self.nodes.get((label - 1) as usize)
     }
 
+    /// Every label this one was derived from, origins first.
+    ///
+    /// Ordered by depth so it reads the way the value was actually built: the
+    /// declared source, then each step that transformed it, then the label
+    /// asked about. This is the product's whole claim — "show me how this value
+    /// got here" — so the order is the feature, not a detail.
+    ///
+    /// `cap` bounds the width. A chain is deep-bounded already by the depth cap,
+    /// but a node can have many parents and a person cannot read a thousand
+    /// steps anyway.
+    pub fn lineage(&self, label: Label, cap: usize) -> Lineage {
+        if label == UNTAINTED {
+            return Lineage::default();
+        }
+        // A truncated label is tainted with no recorded history. Saying so beats
+        // returning an empty chain that reads like "no provenance".
+        if label == TRUNCATED {
+            return Lineage {
+                steps: Vec::new(),
+                truncated: true,
+            };
+        }
+
+        let mut seen = std::collections::HashSet::new();
+        let mut stack = vec![label];
+        let mut steps = Vec::new();
+        let mut truncated = false;
+
+        while let Some(current) = stack.pop() {
+            if !seen.insert(current) {
+                continue;
+            }
+            if steps.len() >= cap {
+                truncated = true;
+                break;
+            }
+            let Some(node) = self.get(current) else {
+                continue;
+            };
+            steps.push(current);
+
+            if let Node::Combine { parents, .. } = node {
+                for &parent in parents {
+                    if parent != UNTAINTED {
+                        stack.push(parent);
+                    }
+                }
+            }
+        }
+
+        // Shallowest first, so an origin heads the list. Ties break on label to
+        // keep the same value rendering the same way every time.
+        steps.sort_by_key(|&step| (self.depth(step), step));
+        Lineage { steps, truncated }
+    }
+
     /// Chains the cap refused to extend. Surfaced, never hidden: a truncated
     /// lineage is a partial answer and the UI has to be able to say so.
     pub fn truncated(&self) -> u64 {
@@ -166,4 +222,13 @@ impl Dag {
     pub fn is_empty(&self) -> bool {
         self.nodes.is_empty()
     }
+}
+
+/// A derivation chain, origins first.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Lineage {
+    pub steps: Vec<Label>,
+    /// The chain is incomplete: it hit the depth cap or the width cap. The UI
+    /// must say so rather than presenting a partial chain as the whole story.
+    pub truncated: bool,
 }

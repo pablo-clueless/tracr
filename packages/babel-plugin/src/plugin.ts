@@ -1,18 +1,21 @@
 import type { PluginObj, PluginPass } from "@babel/core";
 import type * as BabelTypes from "@babel/types";
 import { writeFileSync } from "node:fs";
+import { isAbsolute, relative, sep } from "node:path";
 import type * as t from "@babel/types";
 
 import { resolveOptions, type TracrPluginOptions } from "./options.js";
 import { dottedPath, matchSink, sinkArgs } from "./matchers.js";
 import { ShadowRegistry, shadowName } from "./shadow.js";
 import { CombineOp } from "@pablo_clueless/protocol";
+import { CallGraphBuilder } from "./call-graph.js";
 import { SiteTableBuilder } from "./site-table.js";
 import { LabelBuilder } from "./labels.js";
 
 export interface TracrState {
   options: TracrPluginOptions;
   sites: SiteTableBuilder;
+  calls: CallGraphBuilder;
   shadows: ShadowRegistry;
   labels: LabelBuilder;
   /** Nodes this pass has already rewritten, so re-traversal does not recurse. */
@@ -20,6 +23,31 @@ export interface TracrState {
   /** Temps the transform introduced. They must never be shadowed themselves. */
   generated: Set<string>;
 }
+
+/**
+ * The file's path relative to the project root, with forward slashes.
+ *
+ * Babel resolves `filename` to an absolute path, which then travels: into the
+ * site table, into the skeleton, into node labels, and onto the screen of
+ * anyone the graph is shown to. That leaks the directory layout of whoever ran
+ * the build, and makes a fixture or a snapshot differ per machine.
+ *
+ * Forward slashes because the same repository builds on Windows and Linux, and
+ * two spellings of one file would otherwise be two nodes.
+ */
+const projectRelative = (file: unknown): string => {
+  const opts = (file as { opts?: { filename?: string; root?: string; cwd?: string } }).opts;
+  const filename = opts?.filename;
+  if (opts === undefined || filename === undefined) return "<unknown>";
+
+  const root = opts.root ?? opts.cwd;
+  if (root === undefined || !isAbsolute(filename)) return filename.split(sep).join("/");
+
+  const rel = relative(root, filename);
+  // A path outside the root stays absolute rather than becoming a pile of
+  // `..` segments that name nothing a reader can find.
+  return (rel.startsWith("..") ? filename : rel).split(sep).join("/");
+};
 
 export interface TracrPass extends PluginPass {
   tracr: TracrState;
@@ -100,13 +128,15 @@ export const tracrBabelPlugin = (
     name: "tracr",
 
     pre(file) {
-      const filename = (file as { opts?: { filename?: string } }).opts?.filename ?? "<unknown>";
+      const filename = projectRelative(file);
       const sites = new SiteTableBuilder(0, options.siteIdBase);
+      const calls = new CallGraphBuilder(filename);
       const shadows = new ShadowRegistry();
 
       this.tracr = {
         options,
         sites,
+        calls,
         shadows,
         labels: new LabelBuilder({ types, options, shadows, sites, filename }),
         done: new WeakSet<t.Node>(),
@@ -115,7 +145,7 @@ export const tracrBabelPlugin = (
     },
 
     post(file) {
-      const table = this.tracr.sites.build();
+      const table = { ...this.tracr.sites.build(), calls: this.tracr.calls.build() };
       const meta = (file as unknown as { metadata: Record<string, unknown> }).metadata;
       meta.tracr = { siteTable: table };
 
@@ -399,12 +429,16 @@ export const tracrBabelPlugin = (
 
       // ----------------------------------------------------------- call sites
       CallExpression(path) {
-        const { labels, options: opts, done } = this.tracr;
+        const { labels, options: opts, done, calls } = this.tracr;
         if (done.has(path.node)) return;
 
         const callee = path.node.callee;
         if (callee.type === "V8IntrinsicIdentifier") return;
         if (isRuntimeRef(callee)) return;
+
+        // Recorded before the early returns below: those skip *instrumenting*
+        // a call, but the call still exists and still belongs in the topology.
+        calls.add(path, labels.enclosingName(path));
         if (path.node.arguments.some((arg) => arg.type === "SpreadElement")) return;
 
         const args = path.node.arguments.filter(

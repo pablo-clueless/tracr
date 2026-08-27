@@ -18,7 +18,7 @@
 //! are ordered coarse-to-fine deliberately: a smaller `kind` is always further
 //! up the chain, which is what makes [`Skeleton::lift`] a simple loop.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use serde::Deserialize;
 
@@ -162,6 +162,24 @@ pub struct SiteInfo {
     pub fn_name: Option<String>,
 }
 
+/// A call the parse found, before anything ran.
+///
+/// The static half of the graph: sites say where code is, this says what calls
+/// what. Without it the skeleton declares no edges and every observed crossing
+/// is reported as unpredicted, which drains that signal of meaning.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CallEdge {
+    /// Enclosing function, matching [`SiteInfo::fn_name`]. `None` at top level.
+    pub from: Option<String>,
+    pub to: String,
+    /// Module the callee came from, or `None` if declared in `file`.
+    pub module: Option<String>,
+    pub file: String,
+    pub line: u32,
+    pub col: u32,
+}
+
 /// What one transform unit emits. Matches `SiteTable` in `@tracr/protocol`.
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -169,6 +187,10 @@ pub struct SiteTable {
     pub run_id: u32,
     #[serde(default)]
     pub sites: Vec<SiteInfo>,
+    /// Absent from an older transform, which simply yields a graph with no
+    /// declared edges.
+    #[serde(default)]
+    pub calls: Vec<CallEdge>,
 }
 
 impl Skeleton {
@@ -182,19 +204,27 @@ impl Skeleton {
     /// dedicated parse would re-derive what the transform pass computed while
     /// it was walking the tree anyway, and could disagree with it.
     ///
-    /// # No edges
+    /// # Edges
     ///
-    /// The table records where code *is*, never what calls what, so this
-    /// declares no edges and says so rather than guessing. Every crossing the
-    /// run observes therefore arrives as `unmapped` — accurate, because the
-    /// parse made no prediction to contradict. A later call-graph pass adds
-    /// edges and shrinks `unmapped` back to the genuinely surprising ones.
+    /// Declared edges come from the transform's call list. A call whose target
+    /// cannot be resolved to a function in the graph — a global, a bare module
+    /// specifier, a method on a value — produces no edge, because an edge the
+    /// parse could not verify is a claim on screen that nothing supports.
     ///
     /// Ids are assigned in a fixed order — files, then functions, then call
     /// sites, each sorted — so the same table always produces the same graph.
     /// A viewer's deltas are keyed on these ids and would otherwise scramble
     /// whenever the daemon restarted.
     pub fn from_sites(sites: &[SiteInfo]) -> Self {
+        Self::build(sites, &[])
+    }
+
+    /// The containment tree plus the declared call edges.
+    pub fn from_sites_and_calls(sites: &[SiteInfo], calls: &[CallEdge]) -> Self {
+        Self::build(sites, calls)
+    }
+
+    fn build(sites: &[SiteInfo], calls: &[CallEdge]) -> Self {
         let mut files: BTreeMap<&str, NodeId> = BTreeMap::new();
         // Keyed on (file, function): the same name in two files is two
         // functions. Two same-named functions in one file do collapse, which is
@@ -256,11 +286,12 @@ impl Skeleton {
             next += 1;
         }
 
-        Self::new(nodes, Vec::new())
+        let edges = declared_edges(calls, &files, &functions, &mut next);
+        Self::new(nodes, edges)
     }
 
     pub fn from_site_table(table: &SiteTable) -> Self {
-        Self::from_sites(&table.sites)
+        Self::from_sites_and_calls(&table.sites, &table.calls)
     }
 
     /// Reads a site table as the transform wrote it.
@@ -268,4 +299,111 @@ impl Skeleton {
         let table: SiteTable = serde_json::from_str(json)?;
         Ok(Self::from_site_table(&table))
     }
+}
+
+/// Compares module specifiers and file paths without caring about separators or
+/// extensions.
+///
+/// The transform emits what the source wrote — `./helper.js` for a file on disk
+/// called `helper.ts` — and paths arrive with whichever slash the platform
+/// uses. Matching literally would resolve almost nothing on Windows or in any
+/// TypeScript project.
+fn normalize(path: &str) -> String {
+    let slashed = path.replace('\\', "/");
+    let trimmed = slashed
+        .strip_suffix(".tsx")
+        .or_else(|| slashed.strip_suffix(".jsx"))
+        .or_else(|| slashed.strip_suffix(".mjs"))
+        .or_else(|| slashed.strip_suffix(".cjs"))
+        .or_else(|| slashed.strip_suffix(".ts"))
+        .or_else(|| slashed.strip_suffix(".js"))
+        .unwrap_or(&slashed);
+
+    // `/index` is how a directory import names its entry point.
+    trimmed.strip_suffix("/index").unwrap_or(trimmed).to_owned()
+}
+
+/// Resolves a relative specifier against the importing file's directory.
+fn resolve_relative(from_file: &str, specifier: &str) -> String {
+    let base = normalize(from_file);
+    let mut parts: Vec<&str> = base.split('/').collect();
+    parts.pop(); // drop the file itself, leaving its directory
+
+    let target = normalize(specifier);
+    for segment in target.split('/') {
+        match segment {
+            "." | "" => {}
+            ".." => {
+                parts.pop();
+            }
+            other => parts.push(other),
+        }
+    }
+    parts.join("/")
+}
+
+/// Turns calls into edges between nodes that actually exist.
+fn declared_edges(
+    calls: &[CallEdge],
+    files: &BTreeMap<&str, NodeId>,
+    functions: &BTreeMap<(&str, &str), NodeId>,
+    next: &mut NodeId,
+) -> Vec<SkeletonEdge> {
+    // Files are matched on their normalized form, so a specifier can find them.
+    let by_normalized: BTreeMap<String, (&str, NodeId)> = files
+        .iter()
+        .map(|(&file, &id)| (normalize(file), (file, id)))
+        .collect();
+
+    let mut pairs: BTreeSet<(NodeId, NodeId)> = BTreeSet::new();
+
+    for call in calls {
+        // Which file holds the callee.
+        let target_file = match call.module.as_deref() {
+            // Declared here, or a global we will fail to find in a moment.
+            None => normalize(&call.file),
+            // A bare specifier is a package: never part of this graph.
+            Some(module) if !module.starts_with('.') => continue,
+            Some(module) => resolve_relative(&call.file, module),
+        };
+
+        let Some(&(target_path, target_file_id)) = by_normalized.get(&target_file) else {
+            continue;
+        };
+        let Some(&callee) = functions.get(&(target_path, call.to.as_str())) else {
+            continue;
+        };
+
+        let source_file = normalize(&call.file);
+        let Some(&(source_path, source_file_id)) = by_normalized.get(&source_file) else {
+            continue;
+        };
+
+        // Top-level code has no function frame, so the file itself is the caller.
+        let caller = match call.from.as_deref() {
+            Some(name) => functions
+                .get(&(source_path, name))
+                .copied()
+                .unwrap_or(source_file_id),
+            None => source_file_id,
+        };
+
+        if caller != callee {
+            pairs.insert((caller, callee));
+        }
+        // The module-level view needs its own edge; a call inside one file is
+        // internal there and contributes none.
+        if source_file_id != target_file_id {
+            pairs.insert((source_file_id, target_file_id));
+        }
+    }
+
+    pairs
+        .into_iter()
+        .map(|(source, target)| {
+            let id = *next;
+            *next += 1;
+            SkeletonEdge { id, source, target }
+        })
+        .collect()
 }

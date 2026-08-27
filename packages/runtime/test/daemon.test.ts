@@ -5,7 +5,13 @@ import { fileURLToPath } from "node:url";
 import { createServer } from "node:net";
 import { existsSync } from "node:fs";
 
-import { EventTag, PROTOCOL_VERSION, type AgentEvent } from "@pablo_clueless/protocol";
+import {
+  CombineOp,
+  EventTag,
+  PROTOCOL_VERSION,
+  UpdateTag,
+  type AgentEvent,
+} from "@pablo_clueless/protocol";
 import { wsTransport } from "../src/transport-ws.js";
 
 /**
@@ -89,8 +95,8 @@ const viewer = async (port: number) => {
      * clock, so which frame carries a change is a race. Pinning it would make
      * the test flaky rather than strict.
      */
-    async waitFor(want: (frame: Record<string, unknown>) => boolean) {
-      const deadline = Date.now() + 10_000;
+    async waitFor(want: (frame: Record<string, unknown>) => boolean, timeoutMs = 10_000) {
+      const deadline = Date.now() + timeoutMs;
       while (Date.now() < deadline) {
         const found = frames.find(want);
         if (found !== undefined) return found;
@@ -251,6 +257,71 @@ describe("javascript agent against the rust daemon", () => {
     const crossing = (delta.unmapped as { source: number; target: number }[])[0];
     expect(crossing.source).not.toBe(crossing.target);
     await transport.close();
+    ui.socket.close();
+  });
+
+  it("answers a viewer asking how a value reached a sink", async () => {
+    // The product's whole claim, over the real socket: click a node, get the
+    // derivation back to the declared source.
+    port = await freePort();
+    daemon = await startDaemon(port);
+    const ui = await viewer(port);
+    await ui.waitFor((frame) => frame.tag === UpdateTag.Skeleton);
+
+    const transport = wsTransport({ url: `ws://127.0.0.1:${port}/agent` });
+    await transport.open(hello);
+
+    // req.body.name -> trim() -> interpolated -> handed to query().
+    const events: AgentEvent[] = [
+      [EventTag.Origin, HELPER_SITE, 1, 7],
+      [EventTag.Combine, 2, 2, CombineOp.Builtin, [1]],
+      [EventTag.Combine, 4, 3, CombineOp.Template, [2]],
+      [EventTag.Sink, HANDLER_SITE, 3, 0],
+    ];
+    transport.send(events, 0);
+    await ui.waitFor((frame) => frame.tag === UpdateTag.Delta && (frame.sinks as []).length > 0);
+
+    // Site 5 sits in src/routes.ts, which is node 1.
+    ui.socket.send(JSON.stringify({ chain: 1 }));
+    const reply = await ui.waitFor((frame) => frame.tag === UpdateTag.Chain);
+
+    const steps = reply.steps as {
+      kind: number;
+      op: number | null;
+      sourceId: number | null;
+      nodeId: number | null;
+    }[];
+
+    expect(steps).toHaveLength(3);
+    // Origin first, so the chain reads the way the value was built.
+    expect(steps[0]).toMatchObject({ kind: 0, sourceId: 7 });
+    expect(steps[1]?.op).toBe(CombineOp.Builtin);
+    expect(steps[2]?.op).toBe(CombineOp.Template);
+    expect(reply.truncated).toBe(false);
+    // Resolved against the skeleton, so the UI can name a file without asking.
+    expect(steps[0]?.nodeId).not.toBeNull();
+
+    await transport.close();
+    ui.socket.close();
+  });
+
+  it("stays quiet when a node has no sink to explain", async () => {
+    port = await freePort();
+    daemon = await startDaemon(port);
+    const ui = await viewer(port);
+    await ui.waitFor((frame) => frame.tag === UpdateTag.Skeleton);
+
+    // Nothing has ever run, so there is no derivation to show. A fabricated
+    // empty chain would read as "this value came from nowhere".
+    ui.socket.send(JSON.stringify({ chain: 1 }));
+
+    // Short deadline on purpose: the assertion is that nothing arrives, so the
+    // wait only has to outlast a tick.
+    const answered = await ui
+      .waitFor((frame) => frame.tag === UpdateTag.Chain, 500)
+      .then(() => true)
+      .catch(() => false);
+    expect(answered).toBe(false);
     ui.socket.close();
   });
 });
