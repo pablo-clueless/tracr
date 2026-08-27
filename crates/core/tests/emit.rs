@@ -6,7 +6,7 @@
 
 use serde_json::Value;
 
-use tracr_core::aggregate::{roll_up, DeltaTracker};
+use tracr_core::aggregate::{roll_up, DeltaTracker, Totals};
 use tracr_core::emit::{encode_delta, encode_skeleton, update_tag};
 use tracr_core::ingest::SinkHit;
 use tracr_core::skeleton::{node_kind, NodeId, Skeleton, SkeletonEdge, SkeletonNode};
@@ -48,6 +48,13 @@ fn skeleton() -> Skeleton {
             },
         ],
     )
+}
+
+fn totals(dropped: u64) -> Totals {
+    Totals {
+        dropped,
+        truncated: 0,
+    }
 }
 
 fn parse(json: &str) -> Value {
@@ -133,7 +140,7 @@ fn sends_a_delta_under_its_own_tag() {
     let mut tracker = DeltaTracker::new();
     let rollup = roll_up(&skeleton, &[((1000, 2000), 5)], &[], node_kind::FILE);
 
-    let frame = parse(&encode_delta(&tracker.diff(&rollup, 0)));
+    let frame = parse(&encode_delta(&tracker.diff(&rollup, totals(0))));
 
     assert_eq!(frame["tag"], update_tag::DELTA);
     assert_eq!(frame["edges"][0]["edgeId"], 4);
@@ -158,7 +165,7 @@ fn carries_every_bucket_the_rollup_classified() {
     }];
 
     let rollup = roll_up(&skeleton, &flows, &sinks, node_kind::FILE);
-    let frame = parse(&encode_delta(&tracker.diff(&rollup, 12)));
+    let frame = parse(&encode_delta(&tracker.diff(&rollup, totals(12))));
 
     assert_eq!(frame["unmapped"][0]["source"], 2);
     assert_eq!(frame["unmapped"][0]["target"], 1);
@@ -179,7 +186,7 @@ fn reports_movement_that_never_left_a_module() {
     // Both call sites live in routes.ts, so at file level this is internal.
     let rollup = roll_up(&skeleton, &[((1000, 1000), 9)], &[], node_kind::FILE);
 
-    let frame = parse(&encode_delta(&tracker.diff(&rollup, 0)));
+    let frame = parse(&encode_delta(&tracker.diff(&rollup, totals(0))));
 
     assert_eq!(frame["internal"][0]["nodeId"], 1);
     assert_eq!(frame["internal"][0]["count"], 9);

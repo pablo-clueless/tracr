@@ -184,12 +184,21 @@ impl Core {
         edges
     }
 
+    /// Running counters the UI displays as-is.
+    pub fn totals(&self) -> crate::aggregate::Totals {
+        crate::aggregate::Totals {
+            dropped: self.dropped,
+            truncated: self.dag.truncated(),
+        }
+    }
+
     /// Everything the core is holding: the ceiling the Phase 3 gate watches.
     pub fn footprint(&self) -> Footprint {
         Footprint {
             dag_nodes: self.dag.len(),
             flow_edges: self.flows.len(),
             sink_sites: self.sinks.len(),
+            truncated: self.dag.truncated(),
         }
     }
 }
@@ -199,4 +208,7 @@ pub struct Footprint {
     pub dag_nodes: usize,
     pub flow_edges: usize,
     pub sink_sites: usize,
+    /// Chains the depth cap refused to extend. Not a size, but it belongs with
+    /// them: it is the reason `dag_nodes` stopped climbing.
+    pub truncated: u64,
 }

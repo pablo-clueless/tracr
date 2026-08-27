@@ -83,6 +83,11 @@ export interface CoreDelta {
   droppedTotal: number;
   /** Flows naming a site the skeleton lacks — the parse and the run disagree. */
   unresolved: number;
+  /**
+   * Derivation chains that hit the DAG's depth cap. A provenance panel must say
+   * "the chain stops here" rather than implying it reached a source.
+   */
+  truncated: number;
 }
 
 export interface CoreSkeleton extends Skeleton {

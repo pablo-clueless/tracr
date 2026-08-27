@@ -9,8 +9,17 @@ pub mod aggregate;
 pub mod dag;
 pub mod emit;
 pub mod ingest;
+pub mod session;
 pub mod skeleton;
 pub mod wire;
 
 /// Reserved. Every operation must short-circuit on this before doing any work.
 pub const UNTAINTED: u32 = 0;
+
+/// Reserved. Tainted, but the derivation chain was capped before reaching here.
+///
+/// Distinct from [`UNTAINTED`] on purpose: "clean" and "dirty with no history"
+/// are opposite answers, and collapsing them would let a sink claim safety it
+/// never established. `u32::MAX` rather than a low index so reserving it costs
+/// no renumbering — a DAG that large dies on memory long before it wraps.
+pub const TRUNCATED: u32 = u32::MAX;
