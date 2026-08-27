@@ -31,9 +31,10 @@
 use std::collections::HashMap;
 
 use crate::aggregate::{roll_up, DeltaTracker, Rollup, Totals};
-use crate::emit::{encode_delta, encode_skeleton};
+use crate::dag::Node;
+use crate::emit::{encode_chain, encode_delta, encode_skeleton, WireStep};
 use crate::ingest::{Agent, Core};
-use crate::skeleton::{node_kind, Skeleton};
+use crate::skeleton::{node_kind, NodeId, Skeleton};
 use crate::wire::{decode_frame, Frame, FrameReader, WireError};
 
 pub type ConnId = u32;
@@ -44,6 +45,11 @@ pub type SubId = u32;
 /// The UI degrades past a few thousand elements, so the daemon caps before it
 /// sends rather than letting the renderer discover the limit on its own.
 pub const DEFAULT_ELEMENT_CAP: usize = 2_000;
+
+/// Widest chain a viewer is sent. Depth is already capped by the DAG; this
+/// bounds how many parents a single derivation can fan out to, because a
+/// thousand-step chain is not something a person reads.
+pub const MAX_CHAIN_STEPS: usize = 256;
 
 struct Connection {
     /// `None` until the hello arrives.
@@ -296,6 +302,64 @@ impl Session {
             .map(Agent::misses)
             .sum();
         totals
+    }
+
+    /// The derivation chain behind a node's sink hits, ready to send.
+    ///
+    /// # Why the query is by node
+    ///
+    /// A viewer clicks a box on screen. It knows node ids, because the skeleton
+    /// gave it those; it has never seen a `Label`, and it should not — labels
+    /// are an internal index whose meaning changes as the DAG grows.
+    ///
+    /// # Which sink, when a node holds several
+    ///
+    /// The busiest one. A node can roll up many sink sites and the viewer asked
+    /// about the node, not a line, so the heaviest traffic is the best guess at
+    /// what the person meant. Ties break on `(site, sink)` so the same click
+    /// always shows the same chain.
+    pub fn chain_frame(&self, node: NodeId, level: u8) -> Option<String> {
+        let hit = self
+            .core
+            .sinks()
+            .into_iter()
+            .filter(|hit| self.skeleton.resolve(hit.site, level) == Some(node))
+            .max_by_key(|hit| (hit.count, std::cmp::Reverse((hit.site, hit.sink_id))))?;
+
+        let lineage = self.core.dag.lineage(hit.label, MAX_CHAIN_STEPS);
+        let steps: Vec<WireStep> = lineage
+            .steps
+            .iter()
+            .filter_map(|&label| {
+                let node = self.core.dag.get(label)?;
+                Some(match node {
+                    Node::Origin { source_id, site_id } => WireStep {
+                        label,
+                        kind: 0,
+                        op: None,
+                        source_id: Some(*source_id),
+                        site_id: *site_id,
+                        node_id: self.skeleton.site_node(*site_id),
+                        parents: Vec::new(),
+                    },
+                    Node::Combine {
+                        op,
+                        site_id,
+                        parents,
+                    } => WireStep {
+                        label,
+                        kind: 1,
+                        op: Some(*op),
+                        source_id: None,
+                        site_id: *site_id,
+                        node_id: self.skeleton.site_node(*site_id),
+                        parents: parents.clone(),
+                    },
+                })
+            })
+            .collect();
+
+        Some(encode_chain(node, &steps, lineage.truncated))
     }
 
     /// The current rollup at `level`, capped, without touching delta state.

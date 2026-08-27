@@ -29,6 +29,7 @@ use crate::skeleton::{EdgeId, NodeId, Skeleton};
 pub mod update_tag {
     pub const SKELETON: u8 = 0;
     pub const DELTA: u8 = 1;
+    pub const CHAIN: u8 = 2;
 }
 
 #[derive(Serialize)]
@@ -99,6 +100,45 @@ struct WireDelta {
     unresolved: u64,
     truncated: u64,
     lost: u64,
+}
+
+/// One step in a derivation, as the UI renders it.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WireStep {
+    pub label: u32,
+    /// 0 origin, 1 combine. Mirrors `DagNodeKind` in `@tracr/protocol`.
+    pub kind: u8,
+    /// `CombineOp` for a combine, absent on an origin.
+    pub op: Option<u8>,
+    /// The declared source, absent on a combine.
+    pub source_id: Option<u32>,
+    pub site_id: u32,
+    /// Skeleton node for that site, so the UI can name a file and a line
+    /// without a second lookup. `None` when the parse never saw the site.
+    pub node_id: Option<NodeId>,
+    pub parents: Vec<u32>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WireChain<'a> {
+    tag: u8,
+    /// Echoed back so a viewer can match a reply to the click that caused it.
+    node_id: NodeId,
+    steps: &'a [WireStep],
+    truncated: bool,
+}
+
+/// One derivation chain, in reply to a viewer asking about a node.
+pub fn encode_chain(node_id: NodeId, steps: &[WireStep], truncated: bool) -> String {
+    let wire = WireChain {
+        tag: update_tag::CHAIN,
+        node_id,
+        steps,
+        truncated,
+    };
+    serde_json::to_string(&wire).expect("chain is plain data")
 }
 
 /// The static topology, sent once when a client attaches.

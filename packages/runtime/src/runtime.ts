@@ -21,9 +21,12 @@ export interface RuntimeOptions {
   transport: Transport;
 }
 
+const DEFAULT_INTERVAL_MS = 250;
+const DEFAULT_BUFFER_EXPONENT = 14;
+
 const DEFAULTS: RuntimeOptions = {
-  bufferSize: 1 << 14,
-  flushIntervalMs: 250,
+  bufferSize: 1 << DEFAULT_BUFFER_EXPONENT,
+  flushIntervalMs: DEFAULT_INTERVAL_MS,
   transport: nullTransport,
 };
 

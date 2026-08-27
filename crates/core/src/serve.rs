@@ -32,6 +32,7 @@ use tungstenite::handshake::server::{Request, Response};
 use tungstenite::{accept_hdr, Message, WebSocket};
 
 use crate::session::{ConnId, Session};
+use crate::skeleton::NodeId;
 
 /// Shared because agent threads write to the session while UI threads read it.
 pub type Shared = Arc<Mutex<Session>>;
@@ -148,11 +149,26 @@ fn serve_viewer(session: Shared, mut socket: WebSocket<TcpStream>, tick: Duratio
 
     loop {
         match socket.read() {
-            Ok(Message::Text(text)) => {
-                if let Some(level) = parse_level(&text) {
-                    session.lock().unwrap().set_level(sub, level);
+            Ok(Message::Text(text)) => match parse_request(&text) {
+                Some(ViewerRequest::Level(level)) => session.lock().unwrap().set_level(sub, level),
+                Some(ViewerRequest::Chain(node)) => {
+                    // Answered immediately rather than on the next tick: this is
+                    // a reply to a click, and a delta's worth of latency on it
+                    // would feel like the click did nothing.
+                    let reply = {
+                        let session = session.lock().unwrap();
+                        session
+                            .level(sub)
+                            .and_then(|level| session.chain_frame(node, level))
+                    };
+                    if let Some(reply) = reply {
+                        if socket.send(Message::Text(reply.into())).is_err() {
+                            break;
+                        }
+                    }
                 }
-            }
+                None => {}
+            },
             Ok(Message::Close(_)) => break,
             Ok(_) => {}
             Err(error) if is_timeout(&error) => {}
@@ -182,12 +198,25 @@ fn is_timeout(error: &tungstenite::Error) -> bool {
     )
 }
 
-/// The only thing a viewer may ask for: `{"level": 0 | 1 | 2}`.
-///
-/// Anything else is ignored rather than closing the connection — a newer UI
-/// against an older daemon should degrade, not disconnect.
-fn parse_level(text: &str) -> Option<u8> {
+/// What a viewer may ask for. Named for the sender to avoid colliding with
+/// tungstenite's HTTP `Request` in the handshake above.
+enum ViewerRequest {
+    /// `{"level": 0 | 1 | 2}` — the granularity to render.
+    Level(u8),
+    /// `{"chain": <nodeId>}` — the derivation behind a node's sink hits.
+    Chain(NodeId),
+}
+
+/// Anything unrecognised is ignored rather than closing the connection — a
+/// newer UI against an older daemon should degrade, not disconnect.
+fn parse_request(text: &str) -> Option<ViewerRequest> {
     let value: serde_json::Value = serde_json::from_str(text).ok()?;
-    let level = value.get("level")?.as_u64()?;
-    u8::try_from(level).ok()
+
+    if let Some(level) = value.get("level").and_then(serde_json::Value::as_u64) {
+        return u8::try_from(level).ok().map(ViewerRequest::Level);
+    }
+    if let Some(node) = value.get("chain").and_then(serde_json::Value::as_u64) {
+        return u32::try_from(node).ok().map(ViewerRequest::Chain);
+    }
+    None
 }

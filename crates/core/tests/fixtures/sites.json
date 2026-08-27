@@ -36,5 +36,31 @@
       "col": 9,
       "fnName": "handler"
     }
+  ],
+  "calls": [
+    {
+      "from": "handler",
+      "to": "helper",
+      "module": null,
+      "file": "src/routes.ts",
+      "line": 4,
+      "col": 15
+    },
+    {
+      "from": "handler",
+      "to": "query",
+      "module": null,
+      "file": "src/routes.ts",
+      "line": 5,
+      "col": 9
+    },
+    {
+      "from": null,
+      "to": "helper",
+      "module": null,
+      "file": "src/routes.ts",
+      "line": 7,
+      "col": 14
+    }
   ]
 }

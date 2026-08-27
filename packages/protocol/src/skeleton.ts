@@ -1,3 +1,4 @@
+import type { DagNodeKind } from "./labels.js";
 import type { SiteId } from "./site.js";
 
 /**
@@ -40,6 +41,7 @@ export interface Skeleton {
 export const UpdateTag = {
   Skeleton: 0,
   Delta: 1,
+  Chain: 2,
 } as const;
 export type UpdateTag = (typeof UpdateTag)[keyof typeof UpdateTag];
 
@@ -100,4 +102,38 @@ export interface CoreSkeleton extends Skeleton {
   tag: typeof UpdateTag.Skeleton;
 }
 
-export type CoreUpdate = CoreDelta | CoreSkeleton;
+/**
+ * One step in a derivation, origins first.
+ *
+ * The product's whole claim: given a value at a sink, show the exact chain back
+ * to its source. `nodeId` resolves the step to a place in the skeleton so the
+ * UI can name a file and a line without a second round trip.
+ */
+export interface ChainStep {
+  label: number;
+  /** A `DagNodeKind`: origin or combine. */
+  kind: DagNodeKind;
+  /** A `CombineOp`, absent on an origin. */
+  op: number | null;
+  /** The declared source, absent on a combine. */
+  sourceId: number | null;
+  siteId: number;
+  /** `null` when the static parse never saw the site. */
+  nodeId: number | null;
+  parents: number[];
+}
+
+/** Core -> UI, in reply to `{ chain: nodeId }`. */
+export interface CoreChain {
+  tag: typeof UpdateTag.Chain;
+  /** Echoed back so a viewer can match a reply to the click that caused it. */
+  nodeId: number;
+  steps: ChainStep[];
+  /** The chain hit a cap. Say so rather than presenting a partial chain whole. */
+  truncated: boolean;
+}
+
+/** UI -> core. The only things a viewer may ask for. */
+export type ViewerRequest = { chain: number } | { level: SkeletonNodeKind };
+
+export type CoreUpdate = CoreChain | CoreDelta | CoreSkeleton;

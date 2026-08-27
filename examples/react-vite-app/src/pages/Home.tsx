@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+import type { User } from "../types";
 
 /**
  * The Phase 2 gate: a value typed here must reach the fetch body with intact
@@ -6,7 +8,20 @@ import { useState } from "react";
  * adapter has to shim it.
  */
 const Home = () => {
+  const [users, setUsers] = useState<User[]>([]);
   const [name, setName] = useState("");
+
+  async function fetchUser(): Promise<User[]> {
+    const response = await fetch("https://jsonplaceholder.typicode.com/users");
+    const users = await response.json();
+    return users as User[];
+  }
+
+  useEffect(() => {
+    fetchUser().then((users) => {
+      setUsers(users);
+    });
+  }, []);
 
   const search = async () => {
     const term = name.trim().toLowerCase();
@@ -18,10 +33,19 @@ const Home = () => {
   };
 
   return (
-    <div>
+    <div className="container flex flex-col">
       <h1>tracr react example</h1>
-      <input value={name} onChange={(event) => setName(event.target.value)} placeholder="name" />
-      <button onClick={search}>search</button>
+      <div className="flex">
+        <input value={name} onChange={(event) => setName(event.target.value)} placeholder="name" />
+        <button onClick={search}>search</button>
+      </div>
+      <div className="grid grid-cols-4">
+        {users.map((user) => (
+          <div className="card" key={user.id}>
+            <p>{user.name}</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };

@@ -172,3 +172,80 @@ fn depth_is_not_part_of_a_nodes_identity() {
     assert_eq!(first, second);
     assert_eq!(dag.depth(first), dag.depth(second));
 }
+
+#[test]
+fn walks_a_derivation_back_to_its_source() {
+    // The product's whole claim, at the level that implements it.
+    let mut dag = Dag::new();
+    let source = dag.intern(origin(1, 10));
+    let trimmed = dag.intern(combine(11, vec![source]));
+    let formatted = dag.intern(combine(12, vec![trimmed]));
+
+    let lineage = dag.lineage(formatted, 64);
+
+    assert_eq!(lineage.steps, vec![source, trimmed, formatted]);
+    assert!(!lineage.truncated);
+}
+
+#[test]
+fn puts_the_origin_first_however_the_graph_was_built() {
+    // A person reads a chain forwards: source, then what happened to it.
+    let mut dag = Dag::new();
+    let left = dag.intern(origin(1, 10));
+    let right = dag.intern(origin(2, 20));
+    let joined = dag.intern(combine(30, vec![left, right]));
+
+    let lineage = dag.lineage(joined, 64);
+
+    assert_eq!(lineage.steps.last(), Some(&joined));
+    assert_eq!(dag.depth(lineage.steps[0]), 1);
+}
+
+#[test]
+fn visits_a_shared_ancestor_once() {
+    // Structural sharing is the point of hash-consing; a diamond must not make
+    // the same step appear twice in the chain.
+    let mut dag = Dag::new();
+    let source = dag.intern(origin(1, 10));
+    let left = dag.intern(combine(11, vec![source]));
+    let right = dag.intern(combine(12, vec![source]));
+    let joined = dag.intern(combine(13, vec![left, right]));
+
+    let lineage = dag.lineage(joined, 64);
+
+    assert_eq!(lineage.steps.len(), 4);
+    assert_eq!(lineage.steps.iter().filter(|&&s| s == source).count(), 1);
+}
+
+#[test]
+fn says_a_truncated_label_has_no_recorded_history() {
+    // Not the same as "no provenance": the value is tainted, the chain is gone.
+    let dag = Dag::new();
+
+    let lineage = dag.lineage(TRUNCATED, 64);
+
+    assert!(lineage.steps.is_empty());
+    assert!(lineage.truncated);
+}
+
+#[test]
+fn an_untainted_label_has_no_chain_and_is_not_truncated() {
+    let dag = Dag::new();
+
+    let lineage = dag.lineage(UNTAINTED, 64);
+
+    assert!(lineage.steps.is_empty());
+    assert!(!lineage.truncated);
+}
+
+#[test]
+fn admits_when_a_chain_was_too_wide_to_send() {
+    let mut dag = Dag::new();
+    let parents: Vec<u32> = (0..50).map(|i| dag.intern(origin(i, 10 + i))).collect();
+    let joined = dag.intern(combine(99, parents));
+
+    let lineage = dag.lineage(joined, 8);
+
+    assert!(lineage.steps.len() <= 8);
+    assert!(lineage.truncated);
+}
