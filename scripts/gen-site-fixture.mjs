@@ -1,10 +1,10 @@
 // Emits a site table from the real Babel pass, so the Rust skeleton builder is
 // tested against bytes the transform actually produces rather than a hand-written
 // approximation. Regenerate after a transform change.
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { writeFileSync, mkdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // @babel/core is a dependency of the plugin package, not of the workspace root.
