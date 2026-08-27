@@ -87,6 +87,11 @@ pub fn serve_listener(session: Shared, listener: TcpListener, tick: Duration) {
     }
 }
 
+// The handshake callback's `Result<Response, ErrorResponse>` is tungstenite's
+// signature, not ours: the error variant is a whole HTTP response and there is
+// nothing to box on our side of it. Runs once per connection, so the size costs
+// nothing.
+#[allow(clippy::result_large_err)]
 fn handle(session: Shared, stream: TcpStream, tick: Duration) {
     let mut path = String::new();
     let socket = accept_hdr(stream, |request: &Request, response: Response| {
